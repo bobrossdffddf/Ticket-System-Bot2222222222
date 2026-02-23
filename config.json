@@ -13,11 +13,11 @@
         "prefix": "Criminal",
         "formTitle": "General Support Ticket",
         "formFields": [
-         {
+          {
             "id": "legal_name",
             "label": "Full Legal Name (First & Last)",
             "style": "SHORT",
-           "placeholder": "Saul Goodman",
+            "placeholder": "Saul Goodman",
             "required": true,
             "maxLength": 100
           },
@@ -124,6 +124,8 @@
   "verification": {
     "title": "Verification Required",
     "description": "Click the button below to verify yourself and gain access to the server.",
+    "color": "#00FF00",
+    "image": "https://i.postimg.cc/0jLT8FCm/HIRE-US-(2).png",
     "buttonLabel": "Verify Me",
     "color": "#5865F2"
   }

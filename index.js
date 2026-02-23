@@ -164,7 +164,7 @@ client.on('interactionCreate', async interaction => {
         const verifyEmbed = new EmbedBuilder()
           .setTitle(config.verification.title)
           .setDescription(config.verification.description)
-          .setColor(config.verification.color)
+          .setColor(config.verification.color || '#5865F2')
           .setTimestamp();
 
         if (config.verification.image) {
@@ -387,7 +387,7 @@ client.on('interactionCreate', async interaction => {
       const ticketEmbed = new EmbedBuilder()
         .setTitle(config.ticketEmbed.title)
         .setDescription(`${config.ticketEmbed.description}\n\n${formResponses}`)
-        .setColor(config.ticketEmbed.color)
+        .setColor(config.ticketEmbed.color || '#57F287')
         .setFooter({ text: config.ticketEmbed.footer })
         .setTimestamp();
 

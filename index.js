@@ -167,6 +167,10 @@ client.on('interactionCreate', async interaction => {
           .setColor(config.verification.color)
           .setTimestamp();
 
+        if (config.verification.image) {
+          verifyEmbed.setImage(config.verification.image);
+        }
+
         const verifyRow = new ActionRowBuilder()
           .addComponents(
             new ButtonBuilder()
@@ -289,6 +293,10 @@ client.on('interactionCreate', async interaction => {
           .setColor('#5865F2')
           .setTimestamp();
 
+        if (config.transcriptEmbed && config.transcriptEmbed.image) {
+          transcriptEmbed.setImage(config.transcriptEmbed.image);
+        }
+
         try {
           const thread = await transcriptChannel.threads.create({
             name: `case-${ticketInfo.caseNumber}`,
@@ -382,6 +390,10 @@ client.on('interactionCreate', async interaction => {
         .setColor(config.ticketEmbed.color)
         .setFooter({ text: config.ticketEmbed.footer })
         .setTimestamp();
+
+      if (config.ticketEmbed.image) {
+        ticketEmbed.setImage(config.ticketEmbed.image);
+      }
 
       await ticketChannel.send({ 
         content: `${user} ${supportRole ? supportRole : '@everyone'}`,

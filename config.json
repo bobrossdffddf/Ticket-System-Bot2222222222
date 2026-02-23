@@ -117,6 +117,14 @@
   },
   "roles": {
     "clientRoleName": "Client",
-    "supportRoleId": "1475539253596262461"
+    "supportRoleId": "1475539253596262461",
+    "autoRoleId": "1475539225742147627",
+    "verifyRoleId": "1475539298425241836"
+  },
+  "verification": {
+    "title": "Verification Required",
+    "description": "Click the button below to verify yourself and gain access to the server.",
+    "buttonLabel": "Verify Me",
+    "color": "#5865F2"
   }
 }

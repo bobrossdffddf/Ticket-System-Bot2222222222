@@ -53,6 +53,20 @@ client.once('ready', () => {
           type: 7,
           required: true,
           channel_types: [4]
+        },
+        {
+          name: 'verification',
+          description: 'Channel for verification system',
+          type: 7,
+          required: false,
+          channel_types: [0]
+        },
+        {
+          name: 'transcripts',
+          description: 'Channel for ticket transcripts',
+          type: 7,
+          required: false,
+          channel_types: [0]
         }
       ]
     },
@@ -67,6 +81,21 @@ client.once('ready', () => {
   ]);
 });
 
+client.on('guildMemberAdd', async member => {
+  const autoRoleId = config.roles.autoRoleId;
+  if (autoRoleId) {
+    const role = member.guild.roles.cache.get(autoRoleId);
+    if (role) {
+      try {
+        await member.roles.add(role);
+        console.log(`✅ Auto-role assigned to ${member.user.tag}`);
+      } catch (err) {
+        console.error(`❌ Failed to assign auto-role to ${member.user.tag}:`, err);
+      }
+    }
+  }
+});
+
 client.on('interactionCreate', async interaction => {
   if (interaction.isChatInputCommand()) {
     const { commandName, member, guild, channel } = interaction;
@@ -78,6 +107,8 @@ client.on('interactionCreate', async interaction => {
 
       const targetChannel = interaction.options.getChannel('channel');
       const category = interaction.options.getChannel('category');
+      const verificationChannel = interaction.options.getChannel('verification');
+      const transcriptChannel = interaction.options.getChannel('transcripts');
 
       if (!targetChannel || !category) {
         return interaction.reply({ content: '❌ Invalid channel or category provided.', ephemeral: true });
@@ -86,13 +117,19 @@ client.on('interactionCreate', async interaction => {
       ticketData.panelChannelId = targetChannel.id;
       ticketData.categoryId = category.id;
       
-      // Also set transcript channel to the same channel as panel by default if not set
-      if (!ticketData.transcriptChannelId) {
+      if (verificationChannel) {
+        ticketData.verificationChannelId = verificationChannel.id;
+      }
+      
+      if (transcriptChannel) {
+        ticketData.transcriptChannelId = transcriptChannel.id;
+      } else if (!ticketData.transcriptChannelId) {
         ticketData.transcriptChannelId = targetChannel.id;
       }
       
       saveTicketData();
 
+      // Send Ticket Panel
       const embed = new EmbedBuilder()
         .setTitle(config.ticketPanel.title)
         .setDescription(config.ticketPanel.description)
@@ -106,7 +143,6 @@ client.on('interactionCreate', async interaction => {
           .setLabel(btn.label)
           .setEmoji(btn.emoji);
         
-        // Handle both string styles (from config) and direct ButtonStyle enum
         if (typeof btn.style === 'string') {
           button.setStyle(ButtonStyle[btn.style.charAt(0).toUpperCase() + btn.style.slice(1).toLowerCase()] || ButtonStyle.Primary);
         } else {
@@ -122,7 +158,27 @@ client.on('interactionCreate', async interaction => {
       }
 
       await targetChannel.send({ embeds: [embed], components: rows });
-      await interaction.reply({ content: `✅ Ticket panel sent to ${targetChannel} with category ${category.name}!`, ephemeral: true });
+
+      // Send Verification Panel if verification channel is provided
+      if (verificationChannel) {
+        const verifyEmbed = new EmbedBuilder()
+          .setTitle(config.verification.title)
+          .setDescription(config.verification.description)
+          .setColor(config.verification.color)
+          .setTimestamp();
+
+        const verifyRow = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId('verify_user')
+              .setLabel(config.verification.buttonLabel)
+              .setStyle(ButtonStyle.Success)
+          );
+
+        await verificationChannel.send({ embeds: [verifyEmbed], components: [verifyRow] });
+      }
+
+      await interaction.reply({ content: `✅ Setup complete!\nPanel: ${targetChannel}\nCategory: ${category.name}${verificationChannel ? `\nVerification: ${verificationChannel}` : ''}${transcriptChannel ? `\nTranscripts: ${transcriptChannel}` : ''}`, ephemeral: true });
     }
 
     if (commandName === 'client') {
@@ -251,6 +307,26 @@ client.on('interactionCreate', async interaction => {
 
     if (customId === 'close_cancel') {
       await interaction.update({ content: '❌ Ticket closure cancelled.', embeds: [], components: [] });
+    }
+
+    if (customId === 'verify_user') {
+      const verifyRoleId = config.roles.verifyRoleId;
+      if (!verifyRoleId) {
+        return interaction.reply({ content: '❌ Verification role is not configured.', ephemeral: true });
+      }
+
+      const role = guild.roles.cache.get(verifyRoleId);
+      if (!role) {
+        return interaction.reply({ content: '❌ Verification role not found in server.', ephemeral: true });
+      }
+
+      try {
+        await member.roles.add(role);
+        await interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
+      } catch (err) {
+        console.error('Verification error:', err);
+        await interaction.reply({ content: '❌ Failed to assign verification role. Please contact an admin.', ephemeral: true });
+      }
     }
   }
 

@@ -1,0 +1,122 @@
+{
+  "ticketPanel": {
+    "title": "💴 Hire Us",
+    "description": "Please choose your case type below. If you do not know what button to press please visit Legal Help or create a support ticket",
+    "color": "#FF0000",
+    "image": "https://i.postimg.cc/Jn2BT5RS/HIRE-US-(1).png",
+    "buttons": [
+      {
+        "id": "general",
+        "label": "Criminal Case",
+        "emoji": "💬",
+        "style": "PRIMARY",
+        "prefix": "Criminal",
+        "formTitle": "General Support Ticket",
+        "formFields": [
+         {
+            "id": "legal_name",
+            "label": "Full Legal Name (First & Last)",
+            "style": "SHORT",
+           "placeholder": "Saul Goodman",
+            "required": true,
+            "maxLength": 100
+          },
+          {
+            "id": "charges",
+            "label": "What are you being charged with?",
+            "style": "PARAGRAPH",
+            "placeholder": "Criminal Battery.",
+            "required": true,
+            "maxLength": 1000
+          },
+          {
+            "id": "custody",
+            "label": "Are you currently detained or in jail?",
+            "style": "SHORT",
+            "placeholder": "Yes / No",
+            "required": true,
+            "maxLength": 20
+          },
+          {
+            "id": "court_date",
+            "label": "Next court date (if any)",
+            "style": "SHORT",
+            "placeholder": "2/24/2026",
+            "required": false,
+            "maxLength": 50
+          },
+          {
+            "id": "contact",
+            "label": "Best contact information",
+            "style": "PARAGRAPH",
+            "placeholder": "Justawacko_",
+            "required": true,
+            "maxLength": 300
+          }
+        ]
+      },
+      {
+        "id": "Civil",
+        "label": "Civil Suit",
+        "emoji": "💴",
+        "style": "DANGER",
+        "prefix": "Civil",
+        "formTitle": "Technical Support",
+        "formFields": [
+          {
+            "id": "problem",
+            "label": "Describe the Lawsuit",
+            "style": "PARAGRAPH",
+            "placeholder": "What's not working?",
+            "required": true,
+            "maxLength": 1000
+          },
+          {
+            "id": "steps",
+            "label": "Why are you suing them?",
+            "style": "PARAGRAPH",
+            "placeholder": "Why?",
+            "required": false,
+            "maxLength": 500
+          }
+        ]
+      },
+      {
+        "id": "Support",
+        "label": "Support",
+        "emoji": "💳",
+        "style": "SUCCESS",
+        "prefix": "Support",
+        "formTitle": "Billing Inquiry",
+        "formFields": [
+          {
+            "id": "inquiry",
+            "label": "What's your question?",
+            "style": "PARAGRAPH",
+            "placeholder": "Describe your billing issue...",
+            "required": true,
+            "maxLength": 1000
+          },
+          {
+            "id": "invoice",
+            "label": "Case Number (if applicable)",
+            "style": "SHORT",
+            "placeholder": "INV-12345",
+            "required": false,
+            "maxLength": 50
+          }
+        ]
+      }
+    ]
+  },
+  "ticketEmbed": {
+    "title": "🎫 Ticket Created",
+    "description": "Thank you for contacting us! A staff member will be with you shortly.\n\n**Please describe your issue below:**",
+    "color": "#57F287",
+    "footer": "A member of our staff team will be with you shortly please do not @ anyone"
+  },
+  "roles": {
+    "clientRoleName": "Client",
+    "supportRoleId": "1475539253596262461"
+  }
+}

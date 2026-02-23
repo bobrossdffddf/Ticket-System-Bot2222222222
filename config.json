@@ -15,41 +15,41 @@
         "formFields": [
           {
             "id": "legal_name",
-            "label": "Full Legal Name (First & Last)",
+            "label": "Full legal RP name & Discord username",
             "style": "SHORT",
-            "placeholder": "Saul Goodman",
+            "placeholder": "(Example: John Smith | johnsmith)",
             "required": true,
             "maxLength": 100
           },
           {
             "id": "charges",
-            "label": "What are you being charged with?",
+            "label": "Charge(s) listed on arrest or citation",
             "style": "PARAGRAPH",
-            "placeholder": "Criminal Battery.",
+            "placeholder": "(Example: Criminal Battery.)",
             "required": true,
             "maxLength": 1000
           },
           {
             "id": "custody",
-            "label": "Are you currently detained or in jail?",
+            "label": "Current custody status (In custody / Bonded)?",
             "style": "SHORT",
-            "placeholder": "Yes / No",
+            "placeholder": "(In custody / Bonded)",
             "required": true,
             "maxLength": 20
           },
           {
             "id": "court_date",
-            "label": "Next court date (if any)",
+            "label": "Next court date (MM/DD/YYYY or NONE)",
             "style": "SHORT",
-            "placeholder": "2/24/2026",
+            "placeholder": "(Example: 2/24/2026)",
             "required": false,
             "maxLength": 50
           },
           {
             "id": "contact",
-            "label": "Best contact information",
+            "label": "Attestation (REQUIRED)",
             "style": "PARAGRAPH",
-            "placeholder": "Justawacko_",
+            "placeholder": "Type: I DECLARE THIS SUBMISSION IS FACTUAL",
             "required": true,
             "maxLength": 300
           }
@@ -113,6 +113,7 @@
     "title": "🎫 Ticket Created",
     "description": "Thank you for contacting us! A staff member will be with you shortly.\n\n**Please describe your issue below:**",
     "color": "#57F287",
+    "image": "https://i.postimg.cc/0jLT8FCm/HIRE-US-(2).png",
     "footer": "A member of our staff team will be with you shortly please do not @ anyone"
   },
   "roles": {

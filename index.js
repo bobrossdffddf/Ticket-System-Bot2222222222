@@ -178,7 +178,11 @@ client.on('interactionCreate', async interaction => {
         await verificationChannel.send({ embeds: [verifyEmbed], components: [verifyRow] });
       }
 
-      await interaction.reply({ content: `✅ Setup complete!\nPanel: ${targetChannel}\nCategory: ${category.name}${verificationChannel ? `\nVerification: ${verificationChannel}` : ''}${transcriptChannel ? `\nTranscripts: ${transcriptChannel}` : ''}`, ephemeral: true });
+      try {
+        await interaction.reply({ content: `✅ Setup complete!\nPanel: ${targetChannel}\nCategory: ${category.name}${verificationChannel ? `\nVerification: ${verificationChannel}` : ''}${transcriptChannel ? `\nTranscripts: ${transcriptChannel}` : ''}`, ephemeral: true });
+      } catch (err) {
+        if (err.code !== 10062) console.error('Failed to reply to interaction:', err);
+      }
     }
 
     if (commandName === 'client') {

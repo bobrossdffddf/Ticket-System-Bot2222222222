@@ -1,17 +1,17 @@
 {
   "ticketPanel": {
-    "title": "💴 Hire Us",
-    "description": "Please choose your case type below. If you do not know what button to press please visit Legal Help or create a support ticket",
-    "color": "#FF0000",
-    "image": "https://i.postimg.cc/Jn2BT5RS/HIRE-US-(1).png",
+    "title": "🎫 Support Ticket Panel",
+    "description": "Click one of the buttons below to open a support ticket.",
+    "color": "#5865F2",
+    "image": "https://i.postimg.cc/15j6MgxY/Untitled-design-(6).png",
     "buttons": [
       {
-        "id": "general",
-        "label": "Criminal Case",
-        "emoji": "💬",
+        "id": "Criminal",
+        "label": "Criminal Defense",
+        "emoji": "⚖️",
         "style": "PRIMARY",
         "prefix": "Criminal",
-        "formTitle": "General Support Ticket",
+        "formTitle": "Criminal Defense Representation",
         "formFields": [
           {
             "id": "legal_name",
@@ -61,7 +61,7 @@
         "emoji": "💴",
         "style": "DANGER",
         "prefix": "Civil",
-        "formTitle": "Technical Support",
+        "formTitle": "Civil Suit Request",
         "formFields": [
           {
             "id": "problem",
@@ -87,13 +87,13 @@
         "emoji": "💳",
         "style": "SUCCESS",
         "prefix": "Support",
-        "formTitle": "Billing Inquiry",
+        "formTitle": "Support Inquiry",
         "formFields": [
           {
             "id": "inquiry",
             "label": "What's your question?",
             "style": "PARAGRAPH",
-            "placeholder": "Describe your billing issue...",
+            "placeholder": "Describe your issue...",
             "required": true,
             "maxLength": 1000
           },
@@ -101,7 +101,7 @@
             "id": "invoice",
             "label": "Case Number (if applicable)",
             "style": "SHORT",
-            "placeholder": "INV-12345",
+            "placeholder": "criminal-12345",
             "required": false,
             "maxLength": 50
           }
@@ -113,7 +113,7 @@
     "title": "🎫 Ticket Created",
     "description": "Thank you for contacting us! A staff member will be with you shortly.\n\n**Please describe your issue below:**",
     "color": "#57F287",
-    "image": "https://i.postimg.cc/0jLT8FCm/HIRE-US-(2).png",
+    "image": "https://i.postimg.cc/15j6MgxY/Untitled-design-(6).png",
     "footer": "A member of our staff team will be with you shortly please do not @ anyone"
   },
   "roles": {
@@ -126,8 +126,7 @@
     "title": "Verification Required",
     "description": "Click the button below to verify yourself and gain access to the server.",
     "color": "#00FF00",
-    "image": "https://i.postimg.cc/0jLT8FCm/HIRE-US-(2).png",
-    "buttonLabel": "Verify Me",
-    "color": "#5865F2"
+    "image": "https://i.postimg.cc/fTYb6k1b/Untitled-design-(10).png",
+    "buttonLabel": "Verify Me"
   }
 }

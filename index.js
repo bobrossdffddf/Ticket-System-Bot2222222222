@@ -39,6 +39,7 @@ client.once('ready', () => {
     {
       name: 'setup',
       description: 'Setup the ticket system (Admin only)',
+      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
       options: [
         {
           name: 'channel',
@@ -72,7 +73,8 @@ client.once('ready', () => {
     },
     {
       name: 'client',
-      description: 'Give the ticket creator the client role (Use in ticket channels)',
+      description: 'Give the ticket creator the client role (Admin only)',
+      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
     },
     {
       name: 'close',
@@ -218,6 +220,11 @@ client.on('interactionCreate', async interaction => {
       const ticketInfo = Object.values(ticketData.activeTickets).find(t => t.channelId === channel.id);
       if (!ticketInfo) {
         return interaction.reply({ content: '❌ This command can only be used in ticket channels.', ephemeral: true });
+      }
+
+      // Only allow the ticket creator or an administrator to close the ticket
+      if (interaction.user.id !== ticketInfo.userId && !member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({ content: '❌ Only the ticket creator or an administrator can close this ticket.', ephemeral: true });
       }
 
       const confirmEmbed = new EmbedBuilder()

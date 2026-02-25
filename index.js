@@ -51,6 +51,28 @@ client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
   if (message.guild === null && message.content.toLowerCase() === "done") {
+    // Check if user has an active bill
+    const userId = message.author.id;
+    if (!ticketData.bills) ticketData.bills = {};
+    if (!ticketData.bills[userId]) {
+      ticketData.bills[userId] = [];
+    }
+
+    // If no active bill, create one for testing/demonstration or just find the latest
+    let bill = ticketData.bills[userId].find(b => b.status === "Pending" || b.status === "Overdue");
+    
+    if (!bill) {
+      // Create a default bill if none exists so the "done" command actually does something
+      bill = {
+        id: Date.now().toString(),
+        status: "Pending",
+        date: new Date().toLocaleDateString(),
+        amount: "Variable"
+      };
+      ticketData.bills[userId].push(bill);
+      saveTicketData();
+    }
+
     const embed = new EmbedBuilder()
       .setTitle("Payment Confirmation")
       .setDescription("Please confirm your payment by clicking the button below.")
@@ -58,7 +80,7 @@ client.on("messageCreate", async (message) => {
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId("paid_button")
+        .setCustomId(`paid_button_${bill.id}`)
         .setLabel("Paid")
         .setStyle(ButtonStyle.Success)
     );
@@ -188,12 +210,37 @@ client.once("ready", async () => {
     console.log("✅ Slash commands registered");
     
     // Simple daily reminder system
-    setInterval(() => {
+    setInterval(async () => {
       const now = new Date();
       if (now.getHours() === 9 && now.getMinutes() === 0) { // Every day at 9 AM
-        // This is a simplified version, ideally you'd track billing dates per user
         console.log("Checking for daily billing reminders...");
-        // For each user with an active bill that isn't paid, you could send a DM
+        if (ticketData.bills) {
+          for (const [userId, bills] of Object.entries(ticketData.bills)) {
+            const unpaidBill = bills.find(b => b.status === "Pending" || b.status === "Overdue");
+            if (unpaidBill) {
+              try {
+                const user = await client.users.fetch(userId);
+                const embed = new EmbedBuilder()
+                  .setTitle("💳 Payment Reminder")
+                  .setDescription(`Hello! This is a reminder regarding your outstanding bill from ${unpaidBill.date}.\n\nPlease press the button below once you have completed the payment.`)
+                  .setColor("#D4AF37")
+                  .setTimestamp();
+
+                const row = new ActionRowBuilder().addComponents(
+                  new ButtonBuilder()
+                    .setCustomId(`paid_button_${unpaidBill.id}`)
+                    .setLabel("Paid")
+                    .setStyle(ButtonStyle.Success)
+                );
+
+                await user.send({ embeds: [embed], components: [row] });
+                console.log(`Sent reminder to ${user.tag}`);
+              } catch (err) {
+                console.error(`Failed to send reminder to ${userId}:`, err);
+              }
+            }
+          }
+        }
       }
     }, 60000);
   } catch (err) {
@@ -833,6 +880,43 @@ client.on("interactionCreate", async (interaction) => {
         console.error("Error handling payment action:", err);
         await interaction.reply({ content: "❌ Failed to process action or send DM.", ephemeral: true });
       }
+    }
+
+    if (customId.startsWith("paid_button_")) {
+      const billId = customId.replace("paid_button_", "");
+      const userId = interaction.user.id;
+      
+      if (ticketData.bills && ticketData.bills[userId]) {
+        const bill = ticketData.bills[userId].find(b => b.id === billId);
+        if (bill) {
+          bill.status = "Reviewing";
+          saveTicketData();
+        }
+      }
+
+      const responseEmbed = new EmbedBuilder()
+        .setTitle("Payment Recorded")
+        .setDescription("Hello! The record of you paything has been recorded and sent to our staff team for review and verification. Pleases type /bill view to see the status of your bill.")
+        .setColor("#57F287")
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [responseEmbed] });
+
+      // Notify staff
+      const supportRoleId = config.roles.supportRoleId;
+      const staffChannelId = ticketData.transcriptChannelId; // Using transcript channel as a fallback log
+      const staffChannel = guild?.channels.cache.get(staffChannelId) || (await client.channels.fetch(staffChannelId).catch(() => null));
+      
+      if (staffChannel) {
+        const staffEmbed = new EmbedBuilder()
+          .setTitle("💰 Payment for Review")
+          .setDescription(`User ${interaction.user} (${interaction.user.tag}) has marked a bill as paid.\n**Bill ID:** ${billId}`)
+          .setColor("#D4AF37")
+          .setTimestamp();
+        
+        await staffChannel.send({ content: supportRoleId ? `<@&${supportRoleId}>` : null, embeds: [staffEmbed] });
+      }
+      return;
     }
 
     if (customId === "close_confirm") {

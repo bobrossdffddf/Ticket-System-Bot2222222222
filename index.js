@@ -259,29 +259,35 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (commandName === 'contract') {
+      await interaction.deferReply();
       const member = interaction.member;
       if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-        return interaction.reply({ content: '❌ You need Administrator permissions to use this command.', ephemeral: true });
+        return interaction.editReply({ content: '❌ You need Administrator permissions to use this command.' });
       }
 
-      const contractText = readFileSync('./attached_assets/Pasted-EXECUTIVE-CLIENT-SERVICE-ENGAGEMENT-RETAINER-AGREEMENT-_1771992984208.txt', 'utf8');
-      
-      const embed = new EmbedBuilder()
-        .setTitle('⚖️ EXECUTIVE CLIENT SERVICE AGREEMENT')
-        .setDescription(contractText.slice(0, 4000))
-        .setColor('#2C2F33')
-        .setFooter({ text: 'Goodman & Haller | Blackstone' });
+      try {
+        const contractText = readFileSync('./attached_assets/Pasted-EXECUTIVE-CLIENT-SERVICE-ENGAGEMENT-RETAINER-AGREEMENT-_1771992984208.txt', 'utf8');
+        
+        const embed = new EmbedBuilder()
+          .setTitle('⚖️ EXECUTIVE CLIENT SERVICE AGREEMENT')
+          .setDescription(contractText.slice(0, 4000))
+          .setColor('#2C2F33')
+          .setFooter({ text: 'Goodman & Haller | Blackstone' });
 
-      const row = new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('sign_contract')
-            .setLabel('Sign Agreement')
-            .setStyle(ButtonStyle.Success)
-            .setEmoji('🖋️')
-        );
+        const row = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder()
+              .setCustomId('sign_contract')
+              .setLabel('Sign Agreement')
+              .setStyle(ButtonStyle.Success)
+              .setEmoji('🖋️')
+          );
 
-      await interaction.reply({ embeds: [embed], components: [row] });
+        await interaction.editReply({ embeds: [embed], components: [row] });
+      } catch (err) {
+        console.error('Error in contract command:', err);
+        await interaction.editReply({ content: '❌ Failed to load the contract agreement.' });
+      }
     }
   }
 
@@ -448,9 +454,10 @@ client.on('interactionCreate', async interaction => {
         ctx.fillStyle = 'black';
         
         // Coordinates for image_1771993024943.png
-        ctx.fillText(clientName, 215, 715); // Client Name line
-        ctx.fillText(signDate, 585, 715);   // Client Date line
-        ctx.fillText(signDate, 585, 765);   // Attorney Date line
+        // Refined coordinates for underlining
+        ctx.fillText(clientName, 215, 712); // Client Name line
+        ctx.fillText(signDate, 585, 712);   // Client Date line
+        ctx.fillText(signDate, 585, 762);   // Attorney Date line
 
         const buffer = canvas.toBuffer('image/png');
         const { AttachmentBuilder } = await import('discord.js');

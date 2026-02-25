@@ -761,16 +761,35 @@ client.on("interactionCreate", async (interaction) => {
       if (!ticketData.bills) ticketData.bills = {};
       if (!ticketData.bills[userId]) ticketData.bills[userId] = [];
       
+      const billId = Date.now();
       ticketData.bills[userId].push({
+        id: billId,
         status: "Reviewing",
         date: new Date().toLocaleDateString(),
       });
       saveTicketData();
 
-      const staffChannelId = "1475558252635750581"; // Using transcript channel as staff review for now
+      const staffChannelId = "1476251078382321836";
       const staffChannel = interaction.guild.channels.cache.get(staffChannelId);
       if (staffChannel) {
-        staffChannel.send(`📢 **Payment Review Needed**\nUser: ${interaction.user} (${interaction.user.id})\nStatus: Paid button pressed.`);
+        const staffEmbed = new EmbedBuilder()
+          .setTitle("Payment Review")
+          .setDescription(`${interaction.user} paid their bill.`)
+          .setColor("#D4AF37")
+          .setTimestamp();
+
+        const staffRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`approve_payment_${userId}_${billId}`)
+            .setLabel("Approve")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`deny_payment_${userId}_${billId}`)
+            .setLabel("Deny")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        staffChannel.send({ embeds: [staffEmbed], components: [staffRow] });
       }
 
       const replyEmbed = new EmbedBuilder()
@@ -780,6 +799,40 @@ client.on("interactionCreate", async (interaction) => {
         .setTimestamp();
 
       await interaction.reply({ embeds: [replyEmbed], ephemeral: true });
+    }
+
+    if (customId.startsWith("approve_payment_") || customId.startsWith("deny_payment_")) {
+      const parts = customId.split("_");
+      const action = parts[0];
+      const targetUserId = parts[2];
+      const billId = parts[3];
+
+      const bills = ticketData.bills?.[targetUserId] || [];
+      const bill = bills.find(b => b.id.toString() === billId);
+      
+      try {
+        const targetUser = await client.users.fetch(targetUserId);
+        if (action === "approve") {
+          if (bill) bill.status = "Paid";
+          await targetUser.send("Your bill has been considered paid! Thank you for your business.");
+          await interaction.reply({ content: `✅ Approved payment for <@${targetUserId}>`, ephemeral: true });
+        } else {
+          if (bill) bill.status = "Denied";
+          await targetUser.send("It seems like their was an issue with your bill and our staff team has considered it NOT PAID. If you belive it was a mistake please create a support ticket.");
+          await interaction.reply({ content: `❌ Denied payment for <@${targetUserId}>`, ephemeral: true });
+        }
+        saveTicketData();
+        
+        // Disable buttons on the original message
+        const disabledRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("approved").setLabel("Approved").setStyle(ButtonStyle.Success).setDisabled(true),
+          new ButtonBuilder().setCustomId("denied").setLabel("Denied").setStyle(ButtonStyle.Danger).setDisabled(true)
+        );
+        await interaction.message.edit({ components: [disabledRow] });
+      } catch (err) {
+        console.error("Error handling payment action:", err);
+        await interaction.reply({ content: "❌ Failed to process action or send DM.", ephemeral: true });
+      }
     }
 
     if (customId === "close_confirm") {

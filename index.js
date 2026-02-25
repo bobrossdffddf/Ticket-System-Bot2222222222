@@ -1,5 +1,5 @@
-import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType, AttachmentBuilder } from 'discord.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType, AttachmentBuilder, StringSelectMenuBuilder } from 'discord.js';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import dotenv from 'dotenv';
 import http from 'http';
 import { createCanvas, loadImage } from 'canvas';
@@ -93,6 +93,14 @@ client.once('clientReady', async () => {
         name: 'contract',
         description: 'Send a legal retainer agreement (Admin only)',
         default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+        options: [
+          {
+            name: 'target',
+            description: 'User to send the contract to (optional, defaults to current channel)',
+            type: 6,
+            required: false
+          }
+        ]
       }
     ]);
     console.log('✅ Slash commands registered');
@@ -277,17 +285,61 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (commandName === 'contract') {
-      await interaction.deferReply();
       const member = interaction.member;
       if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
-        return interaction.editReply({ content: '❌ You need Administrator permissions to use this command.' });
+        return interaction.reply({ content: '❌ You need Administrator permissions to use this command.', ephemeral: true });
       }
 
+      const targetUser = interaction.options.getUser('target');
+      
       try {
-        const contractText = readFileSync('./attached_assets/Pasted-EXECUTIVE-CLIENT-SERVICE-ENGAGEMENT-RETAINER-AGREEMENT-_1771992984208.txt', 'utf8');
+        const assetsDir = './attached_assets';
+        const files = readdirSync(assetsDir).filter(f => f.endsWith('.txt'));
+        
+        if (files.length === 0) {
+          return interaction.reply({ content: '❌ No contract templates found in attached_assets.', ephemeral: true });
+        }
+
+        const select = new StringSelectMenuBuilder()
+          .setCustomId('select_contract')
+          .setPlaceholder('Select a contract to send')
+          .addOptions(files.map(f => ({
+            label: f.replace('.txt', '').replace(/_/g, ' ').slice(0, 100),
+            value: f
+          })));
+
+        const row = new ActionRowBuilder().addComponents(select);
+
+        await interaction.reply({ 
+          content: `Select which contract you would like to send${targetUser ? ` to ${targetUser}` : ''}:`, 
+          components: [row], 
+          ephemeral: true 
+        });
+
+        // Store target user if provided
+        if (targetUser) {
+          interaction.client.contractTargets = interaction.client.contractTargets || new Map();
+          interaction.client.contractTargets.set(interaction.user.id, targetUser.id);
+        }
+      } catch (err) {
+        console.error('Error in contract command:', err);
+        await interaction.reply({ content: '❌ Failed to load contract templates.', ephemeral: true });
+      }
+    }
+  }
+
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === 'select_contract') {
+      const fileName = interaction.values[0];
+      const targetUserId = interaction.client.contractTargets?.get(interaction.user.id);
+      const targetUser = targetUserId ? await interaction.guild.members.fetch(targetUserId) : null;
+      
+      try {
+        const contractText = readFileSync(`./attached_assets/${fileName}`, 'utf8');
+        const title = fileName.replace('.txt', '').replace(/_/g, ' ').toUpperCase();
         
         const embed = new EmbedBuilder()
-          .setTitle('⚖️ EXECUTIVE CLIENT SERVICE AGREEMENT')
+          .setTitle(`⚖️ ${title}`)
           .setDescription(contractText.slice(0, 4000))
           .setColor('#2C2F33')
           .setFooter({ text: 'Goodman & Haller | Blackstone' });
@@ -295,16 +347,26 @@ client.on('interactionCreate', async interaction => {
         const row = new ActionRowBuilder()
           .addComponents(
             new ButtonBuilder()
-              .setCustomId('sign_contract')
+              .setCustomId(`sign_contract_${fileName}`)
               .setLabel('Sign Agreement')
               .setStyle(ButtonStyle.Success)
               .setEmoji('🖋️')
           );
 
-        await interaction.editReply({ embeds: [embed], components: [row] });
+        const messagePayload = { content: targetUser ? `${targetUser}` : null, embeds: [embed], components: [row] };
+        
+        if (targetUser) {
+          await interaction.channel.send(messagePayload);
+          await interaction.update({ content: `✅ Sent contract to ${targetUser}`, components: [] });
+        } else {
+          await interaction.channel.send(messagePayload);
+          await interaction.update({ content: '✅ Sent contract to this channel', components: [] });
+        }
+        
+        interaction.client.contractTargets?.delete(interaction.user.id);
       } catch (err) {
-        console.error('Error in contract command:', err);
-        await interaction.editReply({ content: '❌ Failed to load the contract agreement.' });
+        console.error('Error sending contract:', err);
+        await interaction.update({ content: '❌ Failed to send the selected contract.', components: [] });
       }
     }
   }
@@ -313,9 +375,10 @@ client.on('interactionCreate', async interaction => {
     const { customId, guild, member, channel } = interaction;
     console.log(`[${timestamp}] BUTTON: ${customId} | User: ${userTag} (${userId}) | Guild: ${guild?.name} | Channel: ${channel?.name}`);
 
-    if (customId === 'sign_contract') {
+    if (customId.startsWith('sign_contract_')) {
+      const fileName = customId.replace('sign_contract_', '');
       const modal = new ModalBuilder()
-        .setCustomId('modal_contract_sign')
+        .setCustomId(`modal_contract_sign_${fileName}`)
         .setTitle('Sign Retainer Agreement');
 
       const nameInput = new TextInputBuilder()
@@ -453,12 +516,13 @@ client.on('interactionCreate', async interaction => {
     const { customId, fields, guild, user } = interaction;
     console.log(`[${timestamp}] MODAL: ${customId} | User: ${userTag} (${userId}) | Guild: ${guild?.name}`);
 
-    if (customId === 'modal_contract_sign') {
+    if (customId.startsWith('modal_contract_sign_')) {
       await interaction.deferReply();
+      const fileName = customId.replace('modal_contract_sign_', '');
       const clientName = fields.getTextInputValue('client_name');
       const signDate = fields.getTextInputValue('sign_date');
 
-      console.log(`[${timestamp}] Processing contract for: ${clientName} on ${signDate}`);
+      console.log(`[${timestamp}] Processing contract ${fileName} for: ${clientName} on ${signDate}`);
 
       try {
         const imagePath = './attached_assets/image_1771993360063.png';
@@ -489,21 +553,23 @@ client.on('interactionCreate', async interaction => {
         const buffer = canvas.toBuffer('image/png');
         const attachment = new AttachmentBuilder(buffer, { name: 'signed-contract.png' });
 
+        const contractTitle = fileName.replace('.txt', '').replace(/_/g, ' ').toUpperCase();
+        
         const embed = new EmbedBuilder()
           .setTitle('✅ Contract Signed & Executed')
-          .setDescription(`The agreement between **Goodman & Haller | Blackstone** and **${clientName}** has been finalized.`)
+          .setDescription(`The **${contractTitle}** between **Goodman & Haller | Blackstone** and **${clientName}** has been finalized.`)
           .setColor('#57F287')
-          .setImage('attachment://signed-contract.png')
           .setTimestamp();
 
-        await interaction.editReply({ embeds: [embed], files: [attachment] });
+        // Send public message with embed only
+        await interaction.editReply({ embeds: [embed] });
 
-        // Log to contract channel if configured
+        // Log to contract channel with image if configured
         if (ticketData.contractLogChannelId) {
           const logChannel = guild.channels.cache.get(ticketData.contractLogChannelId);
           if (logChannel) {
             const logEmbed = new EmbedBuilder()
-              .setTitle('📜 New Signed Contract')
+              .setTitle(`📜 Signed: ${contractTitle}`)
               .setDescription(`**Client:** ${clientName}\n**Discord User:** ${userTag} (${userId})\n**Date:** ${signDate}`)
               .setColor('#57F287')
               .setImage('attachment://signed-contract.png')
@@ -512,7 +578,7 @@ client.on('interactionCreate', async interaction => {
             await logChannel.send({ embeds: [logEmbed], files: [new AttachmentBuilder(buffer, { name: 'signed-contract.png' })] });
           }
         }
-        console.log(`✅ Contract successfully generated and sent for ${clientName}`);
+        console.log(`✅ Contract successfully generated and logged for ${clientName}`);
       } catch (err) {
         console.error('❌ Error generating signed contract:', err);
         await interaction.editReply({ content: '❌ There was an error generating your signed contract. Please try again or contact an administrator.' });

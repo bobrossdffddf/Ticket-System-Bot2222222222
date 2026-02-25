@@ -47,6 +47,26 @@ function saveTicketData() {
   writeFileSync("./tickets.json", JSON.stringify(ticketData, null, 2));
 }
 
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  if (message.guild === null && message.content.toLowerCase() === "done") {
+    const embed = new EmbedBuilder()
+      .setTitle("Payment Confirmation")
+      .setDescription("Please confirm your payment by clicking the button below.")
+      .setColor("#D4AF37");
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("paid_button")
+        .setLabel("Paid")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    await message.channel.send({ embeds: [embed], components: [row] });
+  }
+});
+
 client.once("ready", async () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
   client.user.setActivity(config.status || "Watching the law", { type: 3 });
@@ -153,8 +173,29 @@ client.once("ready", async () => {
           },
         ],
       },
+      {
+        name: "bill",
+        description: "Billing commands",
+        options: [
+          {
+            name: "view",
+            description: "View your current bill status",
+            type: 1,
+          },
+        ],
+      },
     ]);
     console.log("✅ Slash commands registered");
+    
+    // Simple daily reminder system
+    setInterval(() => {
+      const now = new Date();
+      if (now.getHours() === 9 && now.getMinutes() === 0) { // Every day at 9 AM
+        // This is a simplified version, ideally you'd track billing dates per user
+        console.log("Checking for daily billing reminders...");
+        // For each user with an active bill that isn't paid, you could send a DM
+      }
+    }, 60000);
   } catch (err) {
     console.error("❌ Failed to register slash commands:", err);
   }
@@ -552,6 +593,29 @@ client.on("interactionCreate", async (interaction) => {
         }
       }
     }
+
+    if (commandName === "bill") {
+      const subcommand = interaction.options.getSubcommand();
+      if (subcommand === "view") {
+        const userBills = ticketData.bills?.[interaction.user.id] || [];
+        if (userBills.length === 0) {
+          return interaction.reply({ content: "You have no active bills.", ephemeral: true });
+        }
+
+        const embed = new EmbedBuilder()
+          .setTitle("Your Bills")
+          .setColor("#D4AF37")
+          .setTimestamp();
+
+        let desc = "";
+        userBills.forEach((bill, index) => {
+          desc += `**Bill #${index + 1}**\nStatus: ${bill.status}\nDate: ${bill.date}\n\n`;
+        });
+        embed.setDescription(desc);
+
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+      }
+    }
   }
 
   if (interaction.isStringSelectMenu()) {
@@ -690,6 +754,32 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       await interaction.showModal(modal);
+    }
+
+    if (customId === "paid_button") {
+      const userId = interaction.user.id;
+      if (!ticketData.bills) ticketData.bills = {};
+      if (!ticketData.bills[userId]) ticketData.bills[userId] = [];
+      
+      ticketData.bills[userId].push({
+        status: "Reviewing",
+        date: new Date().toLocaleDateString(),
+      });
+      saveTicketData();
+
+      const staffChannelId = "1475558252635750581"; // Using transcript channel as staff review for now
+      const staffChannel = interaction.guild.channels.cache.get(staffChannelId);
+      if (staffChannel) {
+        staffChannel.send(`📢 **Payment Review Needed**\nUser: ${interaction.user} (${interaction.user.id})\nStatus: Paid button pressed.`);
+      }
+
+      const replyEmbed = new EmbedBuilder()
+        .setTitle("Payment Recorded")
+        .setDescription("Hello! The record of you paything has been recorded and sent to our staff team for review and verification. Pleases type /bill view to see the status of your bill.")
+        .setColor("#D4AF37")
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [replyEmbed], ephemeral: true });
     }
 
     if (customId === "close_confirm") {

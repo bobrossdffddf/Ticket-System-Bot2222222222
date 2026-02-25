@@ -58,11 +58,17 @@ let ticketData = existsSync("./tickets.json")
   : { caseNumber: 1, activeTickets: {} };
 
 function saveTicketData() {
-  writeFileSync("./tickets.json", JSON.stringify(ticketData, null, 2));
+  try {
+    writeFileSync("./tickets.json", JSON.stringify(ticketData, null, 2));
+    console.log(`[LOG] [${new Date().toISOString()}] Ticket data saved successfully.`);
+  } catch (err) {
+    console.error(`[ERROR] [${new Date().toISOString()}] Failed to save ticket data:`, err);
+  }
 }
 
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
+  console.log(`[LOG] [${new Date().toISOString()}] Message from ${message.author.tag} in ${message.guild ? message.guild.name : "DMs"}: ${message.content}`);
 
   if (message.guild === null && message.content.toLowerCase() === "done") {
     const userId = message.author.id;
@@ -89,12 +95,20 @@ client.on("messageCreate", async (message) => {
   }
 
   const adminId = "848356730256883744";
-  if (message.content === "$restart git" && message.author.id === adminId) {
-    await message.reply("🔄 Pulling latest changes and restarting...");
-    const { exec } = await import("child_process");
-    exec("git pull", (error, stdout, stderr) => {
-      process.exit(0);
-    });
+  if (message.author.id === adminId) {
+    if (message.content === "$restart git") {
+      await message.reply("🔄 Pulling latest changes and restarting...");
+      const { exec } = await import("child_process");
+      exec("git pull", (error, stdout, stderr) => {
+        process.exit(0);
+      });
+    } else if (message.content === "$git v") {
+      const { exec } = await import("child_process");
+      exec('git log -1 --pretty=format:"%h - %s (%cr)"', (error, stdout, stderr) => {
+        if (error) return message.reply(`❌ Error: ${error.message}`);
+        message.reply(`📦 **Current Version:**\n\`${stdout}\``);
+      });
+    }
   }
 });
 
@@ -204,6 +218,7 @@ client.once("ready", async () => {
 });
 
 client.on("interactionCreate", async (interaction) => {
+  console.log(`[LOG] [${new Date().toISOString()}] Interaction: ${interaction.type} by ${interaction.user.tag}`);
   if (interaction.isChatInputCommand()) {
     if (!checkCooldown(interaction.user.id, "command")) {
       return interaction.reply({ content: "⚠️ You are doing that too fast! Please wait a few seconds.", ephemeral: true });
@@ -340,7 +355,15 @@ client.on("interactionCreate", async (interaction) => {
             .setTitle("❌ Payment Rejected")
             .setDescription("It seems like there was an issue with your bill and our staff team has considered it NOT PAID. If you believe it was a mistake please create a support ticket.")
             .setColor("#FF0000");
-          await targetUser.send({ embeds: [rejectEmbed] }).catch(() => {});
+          
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`paid_button_${billId}`)
+              .setLabel("Paid")
+              .setStyle(ButtonStyle.Success)
+          );
+
+          await targetUser.send({ embeds: [rejectEmbed], components: [row] }).catch(() => {});
         }
         await interaction.editReply({ content: "❌ Denied." });
       }

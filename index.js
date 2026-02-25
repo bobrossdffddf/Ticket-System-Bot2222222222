@@ -32,7 +32,7 @@ function saveTicketData() {
   writeFileSync('./tickets.json', JSON.stringify(ticketData, null, 2));
 }
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
   
   client.application.commands.set([
@@ -264,7 +264,7 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '❌ You need Administrator permissions to use this command.', ephemeral: true });
       }
 
-      const contractText = readFileSync('./attached_assets/Pasted-EXECUTIVE-CLIENT-SERVICE-ENGAGEMENT-RETAINER-AGREEMENT-_1771992509421.txt', 'utf8');
+      const contractText = readFileSync('./attached_assets/Pasted-EXECUTIVE-CLIENT-SERVICE-ENGAGEMENT-RETAINER-AGREEMENT-_1771992984208.txt', 'utf8');
       
       const embed = new EmbedBuilder()
         .setTitle('⚖️ EXECUTIVE CLIENT SERVICE AGREEMENT')
@@ -436,7 +436,7 @@ client.on('interactionCreate', async interaction => {
 
       try {
         const { createCanvas, loadImage } = await import('canvas');
-        const imagePath = './attached_assets/image_1771992607452.png';
+        const imagePath = './attached_assets/image_1771993024943.png';
         const image = await loadImage(imagePath);
         
         const canvas = createCanvas(image.width, image.height);
@@ -444,13 +444,13 @@ client.on('interactionCreate', async interaction => {
         
         ctx.drawImage(image, 0, 0);
         
-        ctx.font = '24px sans-serif';
+        ctx.font = '20px serif';
         ctx.fillStyle = 'black';
         
-        // Coordinates based on visual estimation of the provided image
-        ctx.fillText(clientName, 180, 415); // Client Name line
-        ctx.fillText(signDate, 550, 415);   // Client Date line
-        ctx.fillText(signDate, 550, 465);   // Attorney Date line
+        // Coordinates for image_1771993024943.png
+        ctx.fillText(clientName, 215, 715); // Client Name line
+        ctx.fillText(signDate, 585, 715);   // Client Date line
+        ctx.fillText(signDate, 585, 765);   // Attorney Date line
 
         const buffer = canvas.toBuffer('image/png');
         const { AttachmentBuilder } = await import('discord.js');

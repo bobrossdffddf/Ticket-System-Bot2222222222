@@ -176,6 +176,27 @@ client.on("guildMemberAdd", async (member) => {
       }
     }
   }
+
+  // Welcome Message
+  const welcomeChannelId = "1475540377762140311";
+  const welcomeChannel = member.guild.channels.cache.get(welcomeChannelId);
+  if (welcomeChannel) {
+    const welcomeEmbed = new EmbedBuilder()
+      .setTitle("Welcome to Goodman & Haller | Blackstone")
+      .setDescription(
+        `Welcome ${member} to Goodman & Haller | Blackstone. We are here to help.\n\n` +
+        `If you have any questions about billing please go to <#1475674313867788420>.\n\n` +
+        `If you have recently been arrested visit <#1475539923770802307> and then visit <#1475540091886895274> to acquire our services.\n\n` +
+        `If you have any questions please ping <@848356730256883744> or <@705288047415001100>.`
+      )
+      .setColor("#D4AF37")
+      .setTimestamp();
+
+    welcomeChannel.send({
+      content: `${member}`,
+      embeds: [welcomeEmbed],
+    });
+  }
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -690,7 +711,7 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       const messages = await channel.messages.fetch({ limit: 100 });
-      const transcript = messages
+      const transcript = Array.from(messages.values())
         .reverse()
         .map(
           (m) =>
@@ -722,9 +743,14 @@ client.on("interactionCreate", async (interaction) => {
           });
 
           await thread.send({ embeds: [transcriptEmbed] });
-          await thread.send({
-            content: `\`\`\`\n${transcript.slice(0, 1900)}\n\`\`\``,
-          });
+          
+          // Split transcript into chunks of 1900 characters to avoid Discord's 2000 character limit
+          const chunks = transcript.match(/[\s\S]{1,1900}/g) || [];
+          for (const chunk of chunks) {
+            await thread.send({
+              content: `\`\`\`\n${chunk}\n\`\`\``,
+            });
+          }
         } catch (error) {
           console.error("Failed to create transcript thread:", error);
         }

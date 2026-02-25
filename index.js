@@ -18,6 +18,19 @@ import dotenv from "dotenv";
 import http from "http";
 import { createCanvas, loadImage } from "canvas";
 
+const cooldowns = new Map();
+
+function checkCooldown(userId, action, limit = 3000) {
+  const key = `${userId}_${action}`;
+  const now = Date.now();
+  if (cooldowns.has(key)) {
+    const lastTime = cooldowns.get(key);
+    if (now - lastTime < limit) return false;
+  }
+  cooldowns.set(key, now);
+  return true;
+}
+
 // Dummy HTTP server to satisfy Replit's port 5000 requirement
 const server = http.createServer((req, res) => {
   res.writeHead(200);
@@ -192,6 +205,9 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async (interaction) => {
   if (interaction.isChatInputCommand()) {
+    if (!checkCooldown(interaction.user.id, "command")) {
+      return interaction.reply({ content: "⚠️ You are doing that too fast! Please wait a few seconds.", ephemeral: true });
+    }
     const { commandName, options, member, guild, channel } = interaction;
 
     if (commandName === "bill") {
@@ -266,6 +282,9 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.reply({ content: "✅ Setup complete.", ephemeral: true });
     }
   } else if (interaction.isButton()) {
+    if (!checkCooldown(interaction.user.id, "button", 2000)) {
+      return interaction.reply({ content: "⚠️ You are clicking buttons too fast!", ephemeral: true });
+    }
     const { customId: custom_id, user, guild, message } = interaction;
 
     if (custom_id.startsWith("paid_button_")) {
@@ -276,6 +295,13 @@ client.on("interactionCreate", async (interaction) => {
         saveTicketData();
 
         await interaction.reply({ content: "Hello! The record of you paying has been recorded and sent to our staff team for review and verification. Please type `/bill view` to see the status of your bill.", ephemeral: true }).catch(console.error);
+
+        // Remove button from user's DM
+        try {
+          await message.edit({ components: [] });
+        } catch (err) {
+          console.error("Failed to remove button from user DM:", err);
+        }
 
         const staffChannel = await client.channels.fetch("1476251078382321836").catch(() => null);
         if (staffChannel) {
@@ -299,11 +325,23 @@ client.on("interactionCreate", async (interaction) => {
 
       if (color === "green") {
         if (bill) bill.status = "Paid";
-        if (targetUser) await targetUser.send("Your bill has been considered paid! Thank you for your business.").catch(() => {});
+        if (targetUser) {
+          const successEmbed = new EmbedBuilder()
+            .setTitle("✅ Payment Confirmed")
+            .setDescription("Your bill has been considered paid! Thank you for your business.")
+            .setColor("#00FF00");
+          await targetUser.send({ embeds: [successEmbed] }).catch(() => {});
+        }
         await interaction.editReply({ content: "✅ Verified." });
       } else {
         if (bill) bill.status = "Rejected";
-        if (targetUser) await targetUser.send("It seems like there was an issue with your bill and our staff team has considered it NOT PAID. If you believe it was a mistake please create a support ticket.").catch(() => {});
+        if (targetUser) {
+          const rejectEmbed = new EmbedBuilder()
+            .setTitle("❌ Payment Rejected")
+            .setDescription("It seems like there was an issue with your bill and our staff team has considered it NOT PAID. If you believe it was a mistake please create a support ticket.")
+            .setColor("#FF0000");
+          await targetUser.send({ embeds: [rejectEmbed] }).catch(() => {});
+        }
         await interaction.editReply({ content: "❌ Denied." });
       }
       saveTicketData();

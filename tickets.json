@@ -20,5 +20,16 @@
   "categoryId": "1475538929724686398",
   "transcriptChannelId": "1475558252635750581",
   "verificationChannelId": "1475536875073699953",
-  "contractLogChannelId": "1475606376830206083"
+  "contractLogChannelId": "1475606376830206083",
+  "bills": {
+    "848356730256883744": [
+      {
+        "id": "1772039456662",
+        "status": "Paid",
+        "type": "Weekly",
+        "amount": 100000,
+        "date": "02/25/2026 09/11"
+      }
+    ]
+  }
 }

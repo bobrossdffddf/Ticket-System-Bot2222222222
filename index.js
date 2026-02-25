@@ -70,6 +70,13 @@ client.once('clientReady', async () => {
             type: 7,
             required: false,
             channel_types: [0]
+          },
+          {
+            name: 'contracts',
+            description: 'Channel for signed contract logs',
+            type: 7,
+            required: false,
+            channel_types: [0]
           }
         ]
       },
@@ -128,6 +135,7 @@ client.on('interactionCreate', async interaction => {
       const category = interaction.options.getChannel('category');
       const verificationChannel = interaction.options.getChannel('verification');
       const transcriptChannel = interaction.options.getChannel('transcripts');
+      const contractLogChannel = interaction.options.getChannel('contracts');
 
       if (!targetChannel || !category) {
         return interaction.reply({ content: '❌ Invalid channel or category provided.', ephemeral: true });
@@ -144,6 +152,10 @@ client.on('interactionCreate', async interaction => {
         ticketData.transcriptChannelId = transcriptChannel.id;
       } else if (!ticketData.transcriptChannelId) {
         ticketData.transcriptChannelId = targetChannel.id;
+      }
+
+      if (contractLogChannel) {
+        ticketData.contractLogChannelId = contractLogChannel.id;
       }
       
       saveTicketData();
@@ -202,7 +214,7 @@ client.on('interactionCreate', async interaction => {
       }
 
       try {
-        await interaction.reply({ content: `✅ Setup complete!\nPanel: ${targetChannel}\nCategory: ${category.name}${verificationChannel ? `\nVerification: ${verificationChannel}` : ''}${transcriptChannel ? `\nTranscripts: ${transcriptChannel}` : ''}`, ephemeral: true });
+        await interaction.reply({ content: `✅ Setup complete!\nPanel: ${targetChannel}\nCategory: ${category.name}${verificationChannel ? `\nVerification: ${verificationChannel}` : ''}${transcriptChannel ? `\nTranscripts: ${transcriptChannel}` : ''}${contractLogChannel ? `\nContract Logs: ${contractLogChannel}` : ''}`, ephemeral: true });
       } catch (err) {
         if (err.code !== 10062) console.error('Failed to reply to interaction:', err);
       }
@@ -485,6 +497,21 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
 
         await interaction.editReply({ embeds: [embed], files: [attachment] });
+
+        // Log to contract channel if configured
+        if (ticketData.contractLogChannelId) {
+          const logChannel = guild.channels.cache.get(ticketData.contractLogChannelId);
+          if (logChannel) {
+            const logEmbed = new EmbedBuilder()
+              .setTitle('📜 New Signed Contract')
+              .setDescription(`**Client:** ${clientName}\n**Discord User:** ${userTag} (${userId})\n**Date:** ${signDate}`)
+              .setColor('#57F287')
+              .setImage('attachment://signed-contract.png')
+              .setTimestamp();
+            
+            await logChannel.send({ embeds: [logEmbed], files: [new AttachmentBuilder(buffer, { name: 'signed-contract.png' })] });
+          }
+        }
         console.log(`✅ Contract successfully generated and sent for ${clientName}`);
       } catch (err) {
         console.error('❌ Error generating signed contract:', err);

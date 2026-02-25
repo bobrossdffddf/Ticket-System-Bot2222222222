@@ -121,6 +121,38 @@ client.once("ready", async () => {
           },
         ],
       },
+      {
+        name: "corporate",
+        description: "Create a corporate category and channels (Admin only)",
+        default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+        options: [
+          {
+            name: "create",
+            description: "Create a new corporate setup",
+            type: 1, // Subcommand
+            options: [
+              {
+                name: "name",
+                description: "Name of the corporation",
+                type: 3,
+                required: true,
+              },
+              {
+                name: "users",
+                description: "Users to add (mention them)",
+                type: 3,
+                required: true,
+              },
+              {
+                name: "role",
+                description: "Custom role name (optional)",
+                type: 3,
+                required: false,
+              },
+            ],
+          },
+        ],
+      },
     ]);
     console.log("✅ Slash commands registered");
   } catch (err) {
@@ -424,6 +456,79 @@ client.on("interactionCreate", async (interaction) => {
           content: "❌ Failed to load contract templates.",
           ephemeral: true,
         });
+      }
+    }
+
+    if (commandName === "corporate") {
+      const subcommand = interaction.options.getSubcommand();
+      if (subcommand === "create") {
+        const name = interaction.options.getString("name");
+        const usersString = interaction.options.getString("users");
+        const customRoleName = interaction.options.getString("role");
+
+        await interaction.deferReply({ ephemeral: true });
+
+        try {
+          // Extract user IDs from mentions
+          const userIds = [...usersString.matchAll(/<@!?(\d+)>/g)].map(m => m[1]);
+          if (userIds.length === 0) {
+            return interaction.editReply("❌ No valid users mentioned.");
+          }
+
+          let role;
+          if (customRoleName) {
+            role = await guild.roles.create({
+              name: customRoleName,
+              reason: `Corporate role for ${name}`,
+            });
+            for (const id of userIds) {
+              try {
+                const member = await guild.members.fetch(id);
+                await member.roles.add(role);
+              } catch (e) {
+                console.error(`Failed to add role to ${id}:`, e);
+              }
+            }
+          }
+
+          const category = await guild.channels.create({
+            name: name,
+            type: ChannelType.GuildCategory,
+            permissionOverwrites: [
+              {
+                id: guild.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+              },
+              ...userIds.map(id => ({
+                id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+              })),
+              ...(role ? [{
+                id: role.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
+              }] : [])
+            ],
+          });
+
+          const channels = [
+            { name: `${name}-correspondence`, type: ChannelType.GuildText },
+            { name: `${name}-announcements`, type: ChannelType.GuildText },
+            { name: `${name}-meeting-room`, type: ChannelType.GuildVoice },
+          ];
+
+          for (const chan of channels) {
+            await guild.channels.create({
+              name: chan.name,
+              type: chan.type,
+              parent: category.id,
+            });
+          }
+
+          await interaction.editReply(`✅ Corporate setup for **${name}** created successfully!`);
+        } catch (error) {
+          console.error("Error creating corporate setup:", error);
+          await interaction.editReply(`❌ Error: ${error.message}`);
+        }
       }
     }
   }
@@ -895,8 +1000,19 @@ client.on("messageCreate", async (message) => {
   if (message.content === "$restart git" && message.author.id === adminId) {
     await message.reply("🔄 Pulling latest changes and restarting...");
 
-    // Add period to status
-    config.status = (config.status || "Watching the law") + ".";
+    // Update version in status
+    const status = config.status || "Watching the law v1.0";
+    const versionMatch = status.match(/v(\d+)\.(\d+)/);
+    let newStatus;
+    if (versionMatch) {
+      const major = parseInt(versionMatch[1]);
+      const minor = parseInt(versionMatch[2]) + 1;
+      newStatus = `Watching the law v${major}.${minor}`;
+    } else {
+      newStatus = "Watching the law v1.1";
+    }
+    
+    config.status = newStatus;
     writeFileSync("./config.json", JSON.stringify(config, null, 2));
 
     const { exec } = await import("child_process");
@@ -915,10 +1031,10 @@ client.on("messageCreate", async (message) => {
     message.content === "$statclear ADMIN ONLY" &&
     message.author.id === adminId
   ) {
-    config.status = "Watching the law";
+    config.status = "Watching the law v1.0";
     writeFileSync("./config.json", JSON.stringify(config, null, 2));
     client.user.setActivity(config.status, { type: 3 });
-    await message.reply("✅ Status reset to 'Watching the law'");
+    await message.reply("✅ Status reset to 'Watching the law v1.0'");
   }
 });
 

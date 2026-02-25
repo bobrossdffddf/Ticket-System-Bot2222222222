@@ -421,6 +421,10 @@ client.on("interactionCreate", async (interaction) => {
       const role = guild.roles.cache.get(roleId);
       if (!role) return interaction.reply({ content: "❌ Verification role not found. Please contact an admin.", ephemeral: true });
 
+      if (member.roles.cache.has(roleId)) {
+        return interaction.reply({ content: "ℹ️ You are already verified!", ephemeral: true });
+      }
+
       try {
         await member.roles.add(role);
         await interaction.reply({ content: "✅ You have been verified and granted access!", ephemeral: true });

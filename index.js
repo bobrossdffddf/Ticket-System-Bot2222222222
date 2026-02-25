@@ -910,12 +910,81 @@ client.on("interactionCreate", async (interaction) => {
       if (staffChannel) {
         const staffEmbed = new EmbedBuilder()
           .setTitle("💰 Payment for Review")
-          .setDescription(`User ${interaction.user} (${interaction.user.tag}) has marked a bill as paid.\n**Bill ID:** ${billId}`)
+          .setDescription(`${interaction.user} paid their bill of ${bill ? bill.amount : "Variable"}\n**Bill ID:** ${billId}`)
           .setColor("#D4AF37")
           .setTimestamp();
         
-        await staffChannel.send({ content: supportRoleId ? `<@&${supportRoleId}>` : null, embeds: [staffEmbed] });
+        const staffRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`approve_payment_${userId}_${billId}`)
+            .setLabel("Approve")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`deny_payment_${userId}_${billId}`)
+            .setLabel("Deny")
+            .setStyle(ButtonStyle.Danger)
+        );
+
+        await staffChannel.send({ 
+          content: supportRoleId ? `<@&${supportRoleId}>` : null, 
+          embeds: [staffEmbed],
+          components: [staffRow]
+        });
       }
+      return;
+    }
+
+    if (customId.startsWith("approve_payment_")) {
+      const parts = customId.split("_");
+      const targetUserId = parts[2];
+      const billId = parts[3];
+
+      if (ticketData.bills && ticketData.bills[targetUserId]) {
+        const bill = ticketData.bills[targetUserId].find(b => b.id === billId);
+        if (bill) {
+          bill.status = "Paid";
+          saveTicketData();
+        }
+      }
+
+      try {
+        const targetUser = await client.users.fetch(targetUserId);
+        await targetUser.send("Your bill has been considered paid! Thank you for your business.");
+      } catch (err) {
+        console.error("Failed to send approval DM:", err);
+      }
+
+      await interaction.update({ 
+        content: `✅ Payment approved for <@${targetUserId}>`,
+        components: [] 
+      });
+      return;
+    }
+
+    if (customId.startsWith("deny_payment_")) {
+      const parts = customId.split("_");
+      const targetUserId = parts[2];
+      const billId = parts[3];
+
+      if (ticketData.bills && ticketData.bills[targetUserId]) {
+        const bill = ticketData.bills[targetUserId].find(b => b.id === billId);
+        if (bill) {
+          bill.status = "Denied";
+          saveTicketData();
+        }
+      }
+
+      try {
+        const targetUser = await client.users.fetch(targetUserId);
+        await targetUser.send("It seems like there was an issue with your bill and our staff team has considered it NOT PAID. If you believe it was a mistake please create a support ticket.");
+      } catch (err) {
+        console.error("Failed to send denial DM:", err);
+      }
+
+      await interaction.update({ 
+        content: `❌ Payment denied for <@${targetUserId}>`,
+        components: [] 
+      });
       return;
     }
 

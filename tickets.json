@@ -24,9 +24,9 @@
   "bills": {
     "848356730256883744": [
       {
-        "id": "1772039859716",
-        "status": "Rejected",
-        "type": "Weekly",
+        "id": "1772040182568",
+        "status": "Paid",
+        "type": "One time",
         "amount": 10000,
         "date": "02/25/2026"
       }

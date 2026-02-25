@@ -125,6 +125,7 @@ client.once("ready", async () => {
         description: "Billing commands",
         options: [
           { name: "view", description: "View your current bill status", type: 1 },
+          { name: "admin", description: "View all active bills (Admin only)", type: 1 },
           {
             name: "create",
             description: "Create a bill for a user (Admin only)",
@@ -241,6 +242,19 @@ client.on("interactionCreate", async (interaction) => {
         let desc = bills.map(b => `**ID:** ${b.id}\n**Type:** ${b.type}\n**Amount:** ${b.amount}\n**Status:** ${b.status}\n**Date:** ${b.date}`).join("\n\n") || "No bills found.";
         embed.setDescription(desc);
         await interaction.reply({ embeds: [embed], ephemeral: true });
+      } else if (subcommand === "admin") {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
+        const embed = new EmbedBuilder().setTitle("All Active Bills").setColor("#D4AF37");
+        let desc = "";
+        if (ticketData.bills) {
+          for (const [userId, bills] of Object.entries(ticketData.bills)) {
+            bills.forEach(b => {
+              desc += `**User:** <@${userId}>\n**ID:** ${b.id}\n**Type:** ${b.type}\n**Amount:** ${b.amount}\n**Status:** ${b.status}\n**Date:** ${b.date}\n\n`;
+            });
+          }
+        }
+        embed.setDescription(desc || "No active bills found.");
+        await interaction.reply({ embeds: [embed], ephemeral: true });
       }
     } else if (commandName === "setup") {
       if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
@@ -252,15 +266,16 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.reply({ content: "✅ Setup complete.", ephemeral: true });
     }
   } else if (interaction.isButton()) {
-    const { customId, user, guild, message } = interaction;
+    const { customId: custom_id, user, guild, message } = interaction;
 
-    if (customId.startsWith("paid_button_")) {
-      const billId = customId.replace("paid_button_", "");
+    if (custom_id.startsWith("paid_button_")) {
+      const billId = custom_id.replace("paid_button_", "");
       const bill = ticketData.bills?.[user.id]?.find(b => b.id === billId);
       if (bill) {
         bill.status = "Reviewing";
         saveTicketData();
-        await interaction.reply({ content: "Hello! The record of you paying has been recorded and sent to our staff team for review and verification. Please type `/bill view` to see the status of your bill.", ephemeral: true });
+
+        await interaction.reply({ content: "Hello! The record of you paying has been recorded and sent to our staff team for review and verification. Please type `/bill view` to see the status of your bill.", ephemeral: true }).catch(console.error);
 
         const staffChannel = await client.channels.fetch("1476251078382321836").catch(() => null);
         if (staffChannel) {
@@ -269,12 +284,13 @@ client.on("interactionCreate", async (interaction) => {
             new ButtonBuilder().setCustomId(`verify_pay_green_${user.id}_${billId}`).setLabel("Verify").setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`verify_pay_red_${user.id}_${billId}`).setLabel("Deny").setStyle(ButtonStyle.Danger)
           );
-          await staffChannel.send({ embeds: [embed], components: [row] });
+          await staffChannel.send({ embeds: [embed], components: [row] }).catch(console.error);
         }
       }
-    } else if (customId.startsWith("verify_pay_")) {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
-      const parts = customId.split("_");
+    } else if (custom_id.startsWith("verify_pay_")) {
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.editReply({ content: "❌ Admin only." });
+      const parts = custom_id.split("_");
       const color = parts[2];
       const targetId = parts[3];
       const billId = parts[4];
@@ -284,14 +300,18 @@ client.on("interactionCreate", async (interaction) => {
       if (color === "green") {
         if (bill) bill.status = "Paid";
         if (targetUser) await targetUser.send("Your bill has been considered paid! Thank you for your business.").catch(() => {});
-        await interaction.reply({ content: "✅ Verified.", ephemeral: true });
+        await interaction.editReply({ content: "✅ Verified." });
       } else {
         if (bill) bill.status = "Rejected";
         if (targetUser) await targetUser.send("It seems like there was an issue with your bill and our staff team has considered it NOT PAID. If you believe it was a mistake please create a support ticket.").catch(() => {});
-        await interaction.reply({ content: "❌ Denied.", ephemeral: true });
+        await interaction.editReply({ content: "❌ Denied." });
       }
       saveTicketData();
-      await message.edit({ components: [] });
+      try {
+        await message.edit({ components: [] });
+      } catch (err) {
+        console.error("Failed to edit message:", err);
+      }
     }
   }
 });

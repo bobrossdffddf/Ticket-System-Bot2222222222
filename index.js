@@ -99,10 +99,16 @@ client.on('guildMemberAdd', async member => {
 });
 
 client.on('interactionCreate', async interaction => {
+  const timestamp = new Date().toLocaleString();
+  const userTag = interaction.user.tag;
+  const userId = interaction.user.id;
+
   if (interaction.isChatInputCommand()) {
-    const { commandName, member, guild, channel } = interaction;
+    const { commandName, guild, channel } = interaction;
+    console.log(`[${timestamp}] COMMAND: /${commandName} | User: ${userTag} (${userId}) | Guild: ${guild?.name} | Channel: ${channel?.name}`);
 
     if (commandName === 'setup') {
+      const member = interaction.member;
       if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
         return interaction.reply({ content: '❌ You need Administrator permissions to use this command.', ephemeral: true });
       }
@@ -250,6 +256,7 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.isButton()) {
     const { customId, guild, member, channel } = interaction;
+    console.log(`[${timestamp}] BUTTON: ${customId} | User: ${userTag} (${userId}) | Guild: ${guild?.name} | Channel: ${channel?.name}`);
 
     if (customId.startsWith('ticket_')) {
       const buttonType = customId.replace('ticket_', '');
@@ -362,6 +369,7 @@ client.on('interactionCreate', async interaction => {
 
   if (interaction.isModalSubmit()) {
     const { customId, fields, guild, user } = interaction;
+    console.log(`[${timestamp}] MODAL: ${customId} | User: ${userTag} (${userId}) | Guild: ${guild?.name}`);
 
     if (customId.startsWith('modal_')) {
       const buttonType = customId.replace('modal_', '');

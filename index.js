@@ -335,7 +335,11 @@ client.on("interactionCreate", async (interaction) => {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
         const channel = interaction.channel;
         const topicParts = channel.name.split("-");
-        if (topicParts.length < 2) return interaction.reply({ content: "❌ This command can only be used in ticket channels.", ephemeral: true });
+        
+        // Check if we are in a ticket category or if name matches ticket pattern
+        if (topicParts.length < 2 || !channel.parent || channel.parent.id !== ticketData.categoryId) {
+            return interaction.reply({ content: "❌ This command can only be used in ticket channels.", ephemeral: true });
+        }
         
         const overwrites = channel.permissionOverwrites.cache;
         let targetId = null;

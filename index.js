@@ -294,6 +294,9 @@ client.on('interactionCreate', async interaction => {
       
       try {
         const assetsDir = './attached_assets';
+        if (!existsSync(assetsDir)) {
+          return interaction.reply({ content: '❌ attached_assets directory not found.', ephemeral: true });
+        }
         const files = readdirSync(assetsDir).filter(f => f.endsWith('.txt'));
         
         if (files.length === 0) {
@@ -564,13 +567,13 @@ client.on('interactionCreate', async interaction => {
         // Send public message with embed only
         await interaction.editReply({ embeds: [embed] });
 
-        // Log to contract channel with image if configured
+        // Log to contract channel with embed and image if configured
         if (ticketData.contractLogChannelId) {
           const logChannel = guild.channels.cache.get(ticketData.contractLogChannelId);
           if (logChannel) {
             const logEmbed = new EmbedBuilder()
               .setTitle(`📜 Signed: ${contractTitle}`)
-              .setDescription(`**Client:** ${clientName}\n**Discord User:** ${userTag} (${userId})\n**Date:** ${signDate}`)
+              .setDescription(`**Client:** ${clientName}\n**Discord User:** ${user.tag} (${user.id})\n**Date:** ${signDate}`)
               .setColor('#57F287')
               .setImage('attachment://signed-contract.png')
               .setTimestamp();

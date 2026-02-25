@@ -1,7 +1,8 @@
-import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType } from 'discord.js';
+import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType, AttachmentBuilder } from 'discord.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import dotenv from 'dotenv';
 import http from 'http';
+import { createCanvas, loadImage } from 'canvas';
 
 // Dummy HTTP server to satisfy Replit's port 5000 requirement
 const server = http.createServer((req, res) => {
@@ -32,60 +33,65 @@ function saveTicketData() {
   writeFileSync('./tickets.json', JSON.stringify(ticketData, null, 2));
 }
 
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
   
-  client.application.commands.set([
-    {
-      name: 'setup',
-      description: 'Setup the ticket system (Admin only)',
-      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
-      options: [
-        {
-          name: 'channel',
-          description: 'Channel to send the ticket panel',
-          type: 7,
-          required: true,
-          channel_types: [0]
-        },
-        {
-          name: 'category',
-          description: 'Category for ticket channels',
-          type: 7,
-          required: true,
-          channel_types: [4]
-        },
-        {
-          name: 'verification',
-          description: 'Channel for verification system',
-          type: 7,
-          required: false,
-          channel_types: [0]
-        },
-        {
-          name: 'transcripts',
-          description: 'Channel for ticket transcripts',
-          type: 7,
-          required: false,
-          channel_types: [0]
-        }
-      ]
-    },
-    {
-      name: 'client',
-      description: 'Give the ticket creator the client role (Admin only)',
-      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
-    },
-    {
-      name: 'close',
-      description: 'Close the current ticket and create a transcript',
-    },
-    {
-      name: 'contract',
-      description: 'Send a legal retainer agreement (Admin only)',
-      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
-    }
-  ]);
+  try {
+    await client.application.commands.set([
+      {
+        name: 'setup',
+        description: 'Setup the ticket system (Admin only)',
+        default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+        options: [
+          {
+            name: 'channel',
+            description: 'Channel to send the ticket panel',
+            type: 7,
+            required: true,
+            channel_types: [0]
+          },
+          {
+            name: 'category',
+            description: 'Category for ticket channels',
+            type: 7,
+            required: true,
+            channel_types: [4]
+          },
+          {
+            name: 'verification',
+            description: 'Channel for verification system',
+            type: 7,
+            required: false,
+            channel_types: [0]
+          },
+          {
+            name: 'transcripts',
+            description: 'Channel for ticket transcripts',
+            type: 7,
+            required: false,
+            channel_types: [0]
+          }
+        ]
+      },
+      {
+        name: 'client',
+        description: 'Give the ticket creator the client role (Admin only)',
+        default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+      },
+      {
+        name: 'close',
+        description: 'Close the current ticket and create a transcript',
+      },
+      {
+        name: 'contract',
+        description: 'Send a legal retainer agreement (Admin only)',
+        default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+      }
+    ]);
+    console.log('✅ Slash commands registered');
+  } catch (err) {
+    console.error('❌ Failed to register slash commands:', err);
+  }
 });
 
 client.on('guildMemberAdd', async member => {
@@ -440,9 +446,15 @@ client.on('interactionCreate', async interaction => {
       const clientName = fields.getTextInputValue('client_name');
       const signDate = fields.getTextInputValue('sign_date');
 
+      console.log(`[${timestamp}] Processing contract for: ${clientName} on ${signDate}`);
+
       try {
-        const { createCanvas, loadImage } = await import('canvas');
         const imagePath = './attached_assets/image_1771993024943.png';
+        if (!existsSync(imagePath)) {
+          console.error(`❌ Image not found at: ${imagePath}`);
+          return interaction.editReply({ content: '❌ Template image not found. Please contact an administrator.' });
+        }
+
         const image = await loadImage(imagePath);
         
         const canvas = createCanvas(image.width, image.height);
@@ -450,17 +462,19 @@ client.on('interactionCreate', async interaction => {
         
         ctx.drawImage(image, 0, 0);
         
-        ctx.font = '20px serif';
+        // Use an italic font for the signature to make it look more like a real signature
+        ctx.font = 'italic 28px serif';
         ctx.fillStyle = 'black';
         
         // Coordinates for image_1771993024943.png
         // Refined coordinates for underlining
         ctx.fillText(clientName, 215, 712); // Client Name line
+        
+        ctx.font = '24px serif';
         ctx.fillText(signDate, 585, 712);   // Client Date line
         ctx.fillText(signDate, 585, 762);   // Attorney Date line
 
         const buffer = canvas.toBuffer('image/png');
-        const { AttachmentBuilder } = await import('discord.js');
         const attachment = new AttachmentBuilder(buffer, { name: 'signed-contract.png' });
 
         const embed = new EmbedBuilder()
@@ -471,8 +485,9 @@ client.on('interactionCreate', async interaction => {
           .setTimestamp();
 
         await interaction.editReply({ embeds: [embed], files: [attachment] });
+        console.log(`✅ Contract successfully generated and sent for ${clientName}`);
       } catch (err) {
-        console.error('Error generating signed contract:', err);
+        console.error('❌ Error generating signed contract:', err);
         await interaction.editReply({ content: '❌ There was an error generating your signed contract. Please try again or contact an administrator.' });
       }
       return;

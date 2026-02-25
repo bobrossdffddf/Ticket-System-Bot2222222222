@@ -1,5 +1,5 @@
 {
-  "caseNumber": 10,
+  "caseNumber": 11,
   "activeTickets": {
     "1475558036444545086": {
       "caseNumber": 3,
@@ -7,6 +7,13 @@
       "username": "justawacko_",
       "type": "general",
       "channelId": "1475558036444545086"
+    },
+    "1476058976230576340": {
+      "caseNumber": 10,
+      "userId": "779101675378049085",
+      "username": ".andyaspect",
+      "type": "Support",
+      "channelId": "1476058976230576340"
     }
   },
   "panelChannelId": "1475540091886895274",

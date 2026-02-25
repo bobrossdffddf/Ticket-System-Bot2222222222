@@ -286,23 +286,171 @@ client.on("interactionCreate", async (interaction) => {
         }
         embed.setDescription(desc || "No active bills found.");
         await interaction.reply({ embeds: [embed], ephemeral: true });
+      } else if (commandName === "client") {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
+        const channel = interaction.channel;
+        const topicParts = channel.name.split("-");
+        if (topicParts.length < 2) return interaction.reply({ content: "❌ This command can only be used in ticket channels.", ephemeral: true });
+        
+        // Find the user who created the ticket (based on permissions usually, or search logs)
+        // For simplicity, we'll try to find the user from the channel's permission overwrites
+        const overwrites = channel.permissionOverwrites.cache;
+        let targetId = null;
+        for (const [id, overwrite] of overwrites) {
+          if (id !== guild.id && id !== config.roles.supportRoleId) {
+            targetId = id;
+            break;
+          }
+        }
+
+        if (!targetId) return interaction.reply({ content: "❌ Could not identify ticket creator.", ephemeral: true });
+        
+        const targetMember = await guild.members.fetch(targetId).catch(() => null);
+        if (!targetMember) return interaction.reply({ content: "❌ Ticket creator not found in server.", ephemeral: true });
+
+        const role = guild.roles.cache.find(r => r.name === config.roles.clientRoleName);
+        if (!role) return interaction.reply({ content: `❌ Role "${config.roles.clientRoleName}" not found.`, ephemeral: true });
+
+        await targetMember.roles.add(role);
+        await interaction.reply({ content: `✅ ${targetMember} has been given the ${role.name} role.` });
+      } else if (commandName === "close") {
+        // Handled by close_ticket button but can be a command too
+        const channel = interaction.channel;
+        const messages = await channel.messages.fetch({ limit: 100 });
+        let transcript = `Transcript for ${channel.name}\n\n`;
+        messages.reverse().forEach(m => {
+          transcript += `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content}\n`;
+        });
+
+        const buffer = Buffer.from(transcript, "utf-8");
+        const attachment = new AttachmentBuilder(buffer, { name: `transcript-${channel.name}.txt` });
+
+        if (ticketData.transcriptChannelId) {
+          const transcriptChannel = await client.channels.fetch(ticketData.transcriptChannelId).catch(() => null);
+          if (transcriptChannel) {
+            await transcriptChannel.send({ content: `Transcript for ${channel.name}`, files: [attachment] });
+          }
+        }
+
+        await interaction.reply({ content: "✅ Ticket closed. Channel will be deleted in 5 seconds." });
+        setTimeout(() => channel.delete().catch(() => {}), 5000);
+      } else if (commandName === "contract") {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
+        const targetUser = options.getUser("target") || interaction.user;
+        const contractText = readFileSync("./attached_assets/retainer_agreement.txt", "utf8");
+        
+        const embed = new EmbedBuilder()
+          .setTitle("Legal Retainer Agreement")
+          .setDescription(contractText.substring(0, 2048))
+          .setColor("#D4AF37");
+        
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`sign_contract_${targetUser.id}`).setLabel("Sign Agreement").setStyle(ButtonStyle.Success)
+        );
+
+        try {
+          await targetUser.send({ embeds: [embed], components: [row] });
+          await interaction.reply({ content: `✅ Contract sent to ${targetUser.tag}`, ephemeral: true });
+        } catch {
+          await interaction.reply({ content: `❌ Failed to DM ${targetUser.tag}.`, ephemeral: true });
+        }
       }
     } else if (commandName === "setup") {
       if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
       const targetChannel = options.getChannel("channel");
       const category = options.getChannel("category");
+      const verificationChannel = options.getChannel("verification");
+      const transcriptChannel = options.getChannel("transcripts");
+      const contractChannel = options.getChannel("contracts");
+
       ticketData.panelChannelId = targetChannel.id;
       ticketData.categoryId = category.id;
+      if (verificationChannel) ticketData.verificationChannelId = verificationChannel.id;
+      if (transcriptChannel) ticketData.transcriptChannelId = transcriptChannel.id;
+      if (contractChannel) ticketData.contractChannelId = contractChannel.id;
       saveTicketData();
-      await interaction.reply({ content: "✅ Setup complete.", ephemeral: true });
+
+      // Send Ticket Panel
+      const ticketEmbed = new EmbedBuilder()
+        .setTitle(config.ticketPanel.title)
+        .setDescription(config.ticketPanel.description)
+        .setColor(config.ticketPanel.color)
+        .setImage(config.ticketPanel.image);
+
+      const ticketRow = new ActionRowBuilder();
+      config.ticketPanel.buttons.forEach(btn => {
+        ticketRow.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`ticket_${btn.id}`)
+            .setLabel(btn.label)
+            .setEmoji(btn.emoji)
+            .setStyle(ButtonStyle[btn.style] || ButtonStyle.Primary)
+        );
+      });
+
+      await targetChannel.send({ embeds: [ticketEmbed], components: [ticketRow] });
+
+      // Send Verification Panel if channel provided
+      if (verificationChannel) {
+        const verifyEmbed = new EmbedBuilder()
+          .setTitle(config.verification.title)
+          .setDescription(config.verification.description)
+          .setColor(config.verification.color)
+          .setImage(config.verification.image);
+
+        const verifyRow = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("verify_user")
+            .setLabel(config.verification.buttonLabel)
+            .setStyle(ButtonStyle.Success)
+        );
+
+        await verificationChannel.send({ embeds: [verifyEmbed], components: [verifyRow] });
+      }
+
+      await interaction.reply({ content: "✅ Setup complete. Panels have been sent.", ephemeral: true });
     }
   } else if (interaction.isButton()) {
     if (!checkCooldown(interaction.user.id, "button", 2000)) {
       return interaction.reply({ content: "⚠️ You are clicking buttons too fast!", ephemeral: true });
     }
-    const { customId: custom_id, user, guild, message } = interaction;
+    const { customId: custom_id, user, guild, message, member } = interaction;
 
-    if (custom_id.startsWith("paid_button_")) {
+    if (custom_id === "verify_user") {
+      const roleId = config.roles.verifyRoleId;
+      const role = guild.roles.cache.get(roleId);
+      if (!role) return interaction.reply({ content: "❌ Verification role not found. Please contact an admin.", ephemeral: true });
+
+      try {
+        await member.roles.add(role);
+        await interaction.reply({ content: "✅ You have been verified and granted access!", ephemeral: true });
+      } catch (err) {
+        console.error("Verification error:", err);
+        await interaction.reply({ content: "❌ Failed to assign verification role. Please check bot permissions.", ephemeral: true });
+      }
+    } else if (custom_id.startsWith("ticket_")) {
+      const typeId = custom_id.replace("ticket_", "");
+      const buttonConfig = config.ticketPanel.buttons.find(b => b.id === typeId);
+      if (!buttonConfig) return interaction.reply({ content: "❌ Invalid ticket type.", ephemeral: true });
+
+      const modal = new ModalBuilder()
+        .setCustomId(`modal_${typeId}`)
+        .setTitle(buttonConfig.formTitle);
+
+      buttonConfig.formFields.forEach(field => {
+        const input = new TextInputBuilder()
+          .setCustomId(field.id)
+          .setLabel(field.label)
+          .setStyle(TextInputStyle[field.style] || TextInputStyle.Short)
+          .setPlaceholder(field.placeholder || "")
+          .setRequired(field.required || false)
+          .setMaxLength(field.maxLength || 1000);
+        
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+      });
+
+      await interaction.showModal(modal);
+    } else if (custom_id.startsWith("paid_button_")) {
       const billId = custom_id.replace("paid_button_", "");
       const bill = ticketData.bills?.[user.id]?.find(b => b.id === billId);
       if (bill) {
@@ -373,6 +521,99 @@ client.on("interactionCreate", async (interaction) => {
       } catch (err) {
         console.error("Failed to edit message:", err);
       }
+    } else if (custom_id.startsWith("sign_contract_")) {
+      const targetId = custom_id.replace("sign_contract_", "");
+      if (user.id !== targetId) return interaction.reply({ content: "❌ You cannot sign this contract.", ephemeral: true });
+
+      await interaction.deferUpdate();
+      
+      const signedEmbed = new EmbedBuilder()
+        .setTitle("✅ Agreement Signed")
+        .setDescription("You have successfully signed the retainer agreement.")
+        .setColor("#00FF00")
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [signedEmbed], components: [] });
+
+      if (ticketData.contractChannelId) {
+        const logChannel = await client.channels.fetch(ticketData.contractChannelId).catch(() => null);
+        if (logChannel) {
+          const logEmbed = new EmbedBuilder()
+            .setTitle("📄 Contract Signed")
+            .setDescription(`${user} has signed the retainer agreement.`)
+            .setColor("#00FF00")
+            .setTimestamp();
+          await logChannel.send({ embeds: [logEmbed] });
+        }
+      }
+    } else if (custom_id === "close_ticket") {
+      await interaction.deferReply({ ephemeral: true });
+      const channel = interaction.channel;
+      const messages = await channel.messages.fetch({ limit: 100 });
+      let transcript = `Transcript for ${channel.name}\n\n`;
+      messages.reverse().forEach(m => {
+        transcript += `[${m.createdAt.toISOString()}] ${m.author.tag}: ${m.content}\n`;
+        if (m.embeds.length > 0) {
+          m.embeds.forEach(e => {
+            transcript += `[EMBED] ${e.title || "No Title"} - ${e.description || "No Description"}\n`;
+          });
+        }
+      });
+
+      const buffer = Buffer.from(transcript, "utf-8");
+      const attachment = new AttachmentBuilder(buffer, { name: `transcript-${channel.name}.txt` });
+
+      if (ticketData.transcriptChannelId) {
+        const transcriptChannel = await client.channels.fetch(ticketData.transcriptChannelId).catch(() => null);
+        if (transcriptChannel) {
+          await transcriptChannel.send({ content: `Transcript for ${channel.name}`, files: [attachment] });
+        }
+      }
+
+      await interaction.editReply({ content: "✅ Ticket closed. Channel will be deleted in 5 seconds." });
+      setTimeout(() => channel.delete().catch(() => {}), 5000);
+    }
+  } else if (interaction.isModalSubmit()) {
+    const { customId: custom_id, fields, guild, user, member } = interaction;
+    if (custom_id.startsWith("modal_")) {
+      const typeId = custom_id.replace("modal_", "");
+      const buttonConfig = config.ticketPanel.buttons.find(b => b.id === typeId);
+      
+      const caseId = ticketData.caseNumber++;
+      saveTicketData();
+
+      const channelName = `${buttonConfig.prefix.toLowerCase()}-${caseId}`;
+      const channel = await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: ticketData.categoryId,
+        permissionOverwrites: [
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+          { id: config.roles.supportRoleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] },
+        ],
+      });
+
+      const embed = new EmbedBuilder()
+        .setTitle(config.ticketEmbed.title)
+        .setDescription(config.ticketEmbed.description)
+        .setColor(config.ticketEmbed.color)
+        .setImage(config.ticketEmbed.image)
+        .setFooter({ text: config.ticketEmbed.footer });
+
+      let fieldData = "";
+      buttonConfig.formFields.forEach(f => {
+        const val = fields.getTextInputValue(f.id);
+        fieldData += `**${f.label}:** ${val}\n`;
+      });
+      embed.addFields({ name: "Form Details", value: fieldData });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("close_ticket").setLabel("Close").setStyle(ButtonStyle.Danger)
+      );
+
+      await channel.send({ content: `${user} <@&${config.roles.supportRoleId}>`, embeds: [embed], components: [row] });
+      await interaction.reply({ content: `✅ Ticket created: ${channel}`, ephemeral: true });
     }
   }
 });

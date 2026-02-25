@@ -8,6 +8,7 @@
     "dev": "node index.js"
   },
   "dependencies": {
+    "canvas": "^3.2.1",
     "discord.js": "^14.25.1",
     "dotenv": "^17.3.1"
   }

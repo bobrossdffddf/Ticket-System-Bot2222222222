@@ -79,6 +79,11 @@ client.once('ready', () => {
     {
       name: 'close',
       description: 'Close the current ticket and create a transcript',
+    },
+    {
+      name: 'contract',
+      description: 'Send a legal retainer agreement (Admin only)',
+      default_member_permissions: PermissionFlagsBits.Administrator.toString(),
     }
   ]);
 });
@@ -252,11 +257,64 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.reply({ embeds: [confirmEmbed], components: [confirmRow], ephemeral: true });
     }
+
+    if (commandName === 'contract') {
+      const member = interaction.member;
+      if (!member.permissions.has(PermissionFlagsBits.Administrator)) {
+        return interaction.reply({ content: '❌ You need Administrator permissions to use this command.', ephemeral: true });
+      }
+
+      const contractText = readFileSync('./attached_assets/Pasted-EXECUTIVE-CLIENT-SERVICE-ENGAGEMENT-RETAINER-AGREEMENT-_1771992509421.txt', 'utf8');
+      
+      const embed = new EmbedBuilder()
+        .setTitle('⚖️ EXECUTIVE CLIENT SERVICE AGREEMENT')
+        .setDescription(contractText.slice(0, 4000))
+        .setColor('#2C2F33')
+        .setFooter({ text: 'Goodman & Haller | Blackstone' });
+
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('sign_contract')
+            .setLabel('Sign Agreement')
+            .setStyle(ButtonStyle.Success)
+            .setEmoji('🖋️')
+        );
+
+      await interaction.reply({ embeds: [embed], components: [row] });
+    }
   }
 
   if (interaction.isButton()) {
     const { customId, guild, member, channel } = interaction;
     console.log(`[${timestamp}] BUTTON: ${customId} | User: ${userTag} (${userId}) | Guild: ${guild?.name} | Channel: ${channel?.name}`);
+
+    if (customId === 'sign_contract') {
+      const modal = new ModalBuilder()
+        .setCustomId('modal_contract_sign')
+        .setTitle('Sign Retainer Agreement');
+
+      const nameInput = new TextInputBuilder()
+        .setCustomId('client_name')
+        .setLabel('Full Legal Name')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Enter your full name')
+        .setRequired(true);
+
+      const dateInput = new TextInputBuilder()
+        .setCustomId('sign_date')
+        .setLabel('Date')
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('MM/DD/YYYY')
+        .setRequired(true);
+
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(nameInput),
+        new ActionRowBuilder().addComponents(dateInput)
+      );
+
+      await interaction.showModal(modal);
+    }
 
     if (customId.startsWith('ticket_')) {
       const buttonType = customId.replace('ticket_', '');
@@ -370,6 +428,48 @@ client.on('interactionCreate', async interaction => {
   if (interaction.isModalSubmit()) {
     const { customId, fields, guild, user } = interaction;
     console.log(`[${timestamp}] MODAL: ${customId} | User: ${userTag} (${userId}) | Guild: ${guild?.name}`);
+
+    if (customId === 'modal_contract_sign') {
+      await interaction.deferReply();
+      const clientName = fields.getTextInputValue('client_name');
+      const signDate = fields.getTextInputValue('sign_date');
+
+      try {
+        const { createCanvas, loadImage } = await import('canvas');
+        const imagePath = './attached_assets/image_1771992607452.png';
+        const image = await loadImage(imagePath);
+        
+        const canvas = createCanvas(image.width, image.height);
+        const ctx = canvas.getContext('2d');
+        
+        ctx.drawImage(image, 0, 0);
+        
+        ctx.font = '24px sans-serif';
+        ctx.fillStyle = 'black';
+        
+        // Coordinates based on visual estimation of the provided image
+        ctx.fillText(clientName, 180, 415); // Client Name line
+        ctx.fillText(signDate, 550, 415);   // Client Date line
+        ctx.fillText(signDate, 550, 465);   // Attorney Date line
+
+        const buffer = canvas.toBuffer('image/png');
+        const { AttachmentBuilder } = await import('discord.js');
+        const attachment = new AttachmentBuilder(buffer, { name: 'signed-contract.png' });
+
+        const embed = new EmbedBuilder()
+          .setTitle('✅ Contract Signed & Executed')
+          .setDescription(`The agreement between **Goodman & Haller | Blackstone** and **${clientName}** has been finalized.`)
+          .setColor('#57F287')
+          .setImage('attachment://signed-contract.png')
+          .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed], files: [attachment] });
+      } catch (err) {
+        console.error('Error generating signed contract:', err);
+        await interaction.editReply({ content: '❌ There was an error generating your signed contract. Please try again or contact an administrator.' });
+      }
+      return;
+    }
 
     if (customId.startsWith('modal_')) {
       const buttonType = customId.replace('modal_', '');

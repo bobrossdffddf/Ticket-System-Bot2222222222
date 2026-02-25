@@ -330,6 +330,8 @@ client.on('interactionCreate', async interaction => {
 
     if (customId === 'verify_user') {
       const verifyRoleId = config.roles.verifyRoleId;
+      const autoRoleId = config.roles.autoRoleId;
+
       if (!verifyRoleId) {
         return interaction.reply({ content: '❌ Verification role is not configured.', ephemeral: true });
       }
@@ -341,6 +343,15 @@ client.on('interactionCreate', async interaction => {
 
       try {
         await member.roles.add(role);
+
+        // Remove auto-role if it exists
+        if (autoRoleId) {
+          const autoRole = guild.roles.cache.get(autoRoleId);
+          if (autoRole && member.roles.cache.has(autoRoleId)) {
+            await member.roles.remove(autoRole);
+          }
+        }
+
         await interaction.reply({ content: '✅ You have been verified!', ephemeral: true });
       } catch (err) {
         console.error('Verification error:', err);
@@ -428,6 +439,25 @@ client.on('interactionCreate', async interaction => {
 
       await interaction.editReply({ content: `✅ Ticket created! ${ticketChannel}` });
     }
+  }
+});
+
+client.on('messageCreate', async message => {
+  if (message.author.bot) return;
+
+  if (message.content === '$restart git' && message.author.id === '848356730256883744') {
+    await message.reply('🔄 Pulling latest changes and restarting...');
+
+    const { exec } = await import('child_process');
+    exec('git pull && pm2 restart ticket-bot', (error, stdout, stderr) => {
+      if (error) {
+        console.error(`exec error: ${error}`);
+        message.channel.send(`❌ Error: ${error.message}`);
+        return;
+      }
+      console.log(`stdout: ${stdout}`);
+      console.error(`stderr: ${stderr}`);
+    });
   }
 });
 

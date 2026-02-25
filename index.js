@@ -49,7 +49,7 @@ function saveTicketData() {
 
 client.once("ready", async () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
-  client.user.setActivity("Watching the law", { type: 3 }); // Watching the law
+  client.user.setActivity(config.status || "Watching the law", { type: 3 });
 
   try {
     await client.application.commands.set([
@@ -472,13 +472,14 @@ client.on("interactionCreate", async (interaction) => {
           await interaction.channel.send(messagePayload);
           await interaction.update({
             content: `✅ Sent contract to ${targetUser}`,
+            embeds: [],
             components: [],
           });
         } else {
-          await interaction.channel.send(messagePayload);
           await interaction.update({
-            content: "✅ Sent contract to this channel",
-            components: [],
+            content: null,
+            embeds: [embed],
+            components: [row],
           });
         }
 
@@ -889,22 +890,35 @@ client.on("interactionCreate", async (interaction) => {
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  if (
-    message.content === "$restart git" &&
-    message.author.id === "848356730256883744"
-  ) {
+  const adminId = "848356730256883744";
+
+  if (message.content === "$restart git" && message.author.id === adminId) {
     await message.reply("🔄 Pulling latest changes and restarting...");
 
+    // Add period to status
+    config.status = (config.status || "Watching the law") + ".";
+    writeFileSync("./config.json", JSON.stringify(config, null, 2));
+
     const { exec } = await import("child_process");
-    exec("git pull && pm2 restart ticket-bot", (error, stdout, stderr) => {
+    exec("git pull", (error, stdout, stderr) => {
       if (error) {
         console.error(`exec error: ${error}`);
-        message.channel.send(`❌ Error: ${error.message}`);
-        return;
+        message.channel.send(`❌ Git Pull Error: ${error.message}`);
       }
       console.log(`stdout: ${stdout}`);
       console.error(`stderr: ${stderr}`);
+      process.exit(0);
     });
+  }
+
+  if (
+    message.content === "$statclear ADMIN ONLY" &&
+    message.author.id === adminId
+  ) {
+    config.status = "Watching the law";
+    writeFileSync("./config.json", JSON.stringify(config, null, 2));
+    client.user.setActivity(config.status, { type: 3 });
+    await message.reply("✅ Status reset to 'Watching the law'");
   }
 });
 

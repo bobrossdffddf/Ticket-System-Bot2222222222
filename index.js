@@ -33,8 +33,9 @@ function saveTicketData() {
   writeFileSync('./tickets.json', JSON.stringify(ticketData, null, 2));
 }
 
-client.once('clientReady', async () => {
+client.once('ready', async () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
+  client.user.setActivity('Watching the law', { type: 3 }); // Watching the law
   
   try {
     await client.application.commands.set([
@@ -560,7 +561,7 @@ client.on('interactionCreate', async interaction => {
         
         const embed = new EmbedBuilder()
           .setTitle('✅ Contract Signed & Executed')
-          .setDescription(`The **${contractTitle}** between **Goodman & Haller | Blackstone** and **${clientName}** has been finalized.`)
+          .setDescription(`⸻\n\n**CLIENT ACKNOWLEDGMENT**\n\n⸻\n\nGoodman & Haller | Blackstone\nBy: Mickey Haller, Esq.\n\n\n**CLIENT NAME:** __${clientName}__                     **DATE:** __${signDate}__\n\n**ATTORNEY NAME:** __Saul Goodman__                                **DATE:** __${signDate}__`)
           .setColor('#57F287')
           .setTimestamp();
 

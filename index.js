@@ -449,7 +449,7 @@ client.on('interactionCreate', async interaction => {
       console.log(`[${timestamp}] Processing contract for: ${clientName} on ${signDate}`);
 
       try {
-        const imagePath = './attached_assets/image_1771993024943.png';
+        const imagePath = './attached_assets/image_1771993360063.png';
         if (!existsSync(imagePath)) {
           console.error(`❌ Image not found at: ${imagePath}`);
           return interaction.editReply({ content: '❌ Template image not found. Please contact an administrator.' });
@@ -466,13 +466,13 @@ client.on('interactionCreate', async interaction => {
         ctx.font = 'italic 28px serif';
         ctx.fillStyle = 'black';
         
-        // Coordinates for image_1771993024943.png
-        // Refined coordinates for underlining
-        ctx.fillText(clientName, 215, 712); // Client Name line
+        // Coordinates for image_1771993360063.png
+        // Refined coordinates for underlining based on the new template
+        ctx.fillText(clientName, 240, 742); // Client Name line
         
         ctx.font = '24px serif';
-        ctx.fillText(signDate, 585, 712);   // Client Date line
-        ctx.fillText(signDate, 585, 762);   // Attorney Date line
+        ctx.fillText(signDate, 610, 742);   // Client Date line
+        ctx.fillText(signDate, 610, 816);   // Attorney Date line
 
         const buffer = canvas.toBuffer('image/png');
         const attachment = new AttachmentBuilder(buffer, { name: 'signed-contract.png' });

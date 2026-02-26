@@ -140,10 +140,19 @@ client.once("clientReady", async () => {
       },
       {
         name: "contract",
-        description: "Send a legal retainer agreement (Admin only)",
+        description: "Send a legal agreement (Admin only)",
         default_member_permissions: PermissionFlagsBits.Administrator.toString(),
         options: [
-          { name: "target", description: "User to send the contract to", type: 6, required: false },
+          { 
+            name: "type", 
+            description: "Type of contract to send", 
+            type: 3, 
+            required: true,
+            choices: [
+              { name: "Retainer Agreement", value: "retainer" }
+            ]
+          },
+          { name: "target", description: "User to send the contract to (DMs)", type: 6, required: false },
         ],
       },
       {
@@ -393,23 +402,51 @@ client.on("interactionCreate", async (interaction) => {
         setTimeout(() => channel.delete().catch(() => {}), 5000);
       } else if (commandName === "contract") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
-        const targetUser = options.getUser("target") || interaction.user;
-        const contractText = readFileSync("./attached_assets/retainer_agreement.txt", "utf8");
         
-        const embed = new EmbedBuilder()
-          .setTitle("Legal Retainer Agreement")
-          .setDescription(contractText.substring(0, 2048))
-          .setColor("#D4AF37");
+        const targetUser = options.getUser("target");
+        const contractType = options.getString("type") || "retainer";
         
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId(`sign_contract_${targetUser.id}`).setLabel("Sign Agreement").setStyle(ButtonStyle.Success)
-        );
+        const contracts = {
+          "retainer": {
+            title: "Legal Retainer Agreement",
+            file: "./attached_assets/retainer_agreement.txt",
+            color: "#D4AF37"
+          }
+          // Add new contracts here easily:
+          // "nda": { title: "Non-Disclosure Agreement", file: "./assets/nda.txt", color: "#C0C0C0" }
+        };
+
+        const selectedContract = contracts[contractType];
+        if (!selectedContract) return interaction.reply({ content: "❌ Invalid contract type.", ephemeral: true });
 
         try {
-          await targetUser.send({ embeds: [embed], components: [row] });
-          await interaction.reply({ content: `✅ Contract sent to ${targetUser.tag}`, ephemeral: true });
-        } catch {
-          await interaction.reply({ content: `❌ Failed to DM ${targetUser.tag}.`, ephemeral: true });
+          const contractText = readFileSync(selectedContract.file, "utf8");
+          const embed = new EmbedBuilder()
+            .setTitle(selectedContract.title)
+            .setDescription(contractText.substring(0, 2048))
+            .setColor(selectedContract.color);
+          
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`sign_contract_${targetUser ? targetUser.id : interaction.user.id}`)
+              .setLabel("Sign Agreement")
+              .setStyle(ButtonStyle.Success)
+          );
+
+          if (targetUser) {
+            try {
+              await targetUser.send({ embeds: [embed], components: [row] });
+              await interaction.reply({ content: `✅ Contract sent to ${targetUser.tag}` });
+            } catch (err) {
+              await interaction.reply({ content: `❌ Failed to DM ${targetUser.tag}. Sending here instead...` });
+              await interaction.channel.send({ content: `${targetUser}, please review and sign:`, embeds: [embed], components: [row] });
+            }
+          } else {
+            await interaction.reply({ embeds: [embed], components: [row] });
+          }
+        } catch (err) {
+          console.error("Contract command error:", err);
+          await interaction.reply({ content: "❌ Error: Could not read contract file or send message.", ephemeral: true });
         }
       } else if (commandName === "setup") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });

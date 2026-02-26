@@ -93,7 +93,14 @@ client.on("messageCreate", async (message) => {
     if (message.content === "$restart git") {
       await message.reply("🔄 Pulling latest changes and restarting...");
       const { exec } = await import("child_process");
-      exec("git pull", () => process.exit(0));
+      exec("git pull", (err, stdout, stderr) => {
+        if (err) {
+          console.error(`Git pull error: ${err}`);
+          return message.reply(`❌ Git pull failed: ${err.message}`).catch(() => {});
+        }
+        console.log(`Git pull output: ${stdout}`);
+        process.exit(0);
+      });
     } else if (message.content === "$git v") {
       const { exec } = await import("child_process");
       exec('git log -1 --pretty=format:"%h - %s (%cr)"', (error, stdout) => {
@@ -104,7 +111,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`✅ Bot is online as ${client.user.tag}`);
   client.user.setActivity(config.status || "Watching the law", { type: 3 });
 
@@ -212,7 +219,7 @@ client.once("ready", async () => {
 client.on("guildMemberAdd", async (member) => {
   console.log(`[LOG] [${new Date().toISOString()}] Member joined: ${member.user.tag}`);
   
-  const welcomeChannelId = "1475538356942016625";
+  const welcomeChannelId = config.channels?.welcomeChannelId || "1475538356942016625";
   const welcomeChannel = await client.channels.fetch(welcomeChannelId).catch(() => null);
   
   if (welcomeChannel) {
@@ -223,14 +230,18 @@ client.on("guildMemberAdd", async (member) => {
       ctx.fillStyle = "#1e1e1e";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      const avatar = await loadImage(member.user.displayAvatarURL({ extension: "png", size: 256 }));
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(125, 125, 100, 0, Math.PI * 2, true);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(avatar, 25, 25, 200, 200);
-      ctx.restore();
+      const avatarURL = member.user.displayAvatarURL({ extension: "png", size: 256 });
+      const avatar = await loadImage(avatarURL).catch(() => null);
+      
+      if (avatar) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(125, 125, 100, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(avatar, 25, 25, 200, 200);
+        ctx.restore();
+      }
       
       ctx.fillStyle = "#ffffff";
       ctx.font = "35px sans-serif";
@@ -248,15 +259,18 @@ client.on("guildMemberAdd", async (member) => {
         .setColor("#D4AF37")
         .setImage("attachment://welcome.png");
         
-      await welcomeChannel.send({ embeds: [welcomeEmbed], files: [attachment] });
+      await welcomeChannel.send({ embeds: [welcomeEmbed], files: [attachment] }).catch(err => console.error("Failed to send welcome message:", err));
     } catch (err) {
       console.error("Welcome canvas error:", err);
     }
   }
 
-  const autoRoleId = config.roles.autoRoleId;
-  const role = member.guild.roles.cache.get(autoRoleId);
-  if (role) await member.roles.add(role).catch(console.error);
+  const autoRoleId = config.roles?.autoRoleId;
+  if (autoRoleId) {
+    let role = member.guild.roles.cache.get(autoRoleId);
+    if (!role) role = await member.guild.roles.fetch(autoRoleId).catch(() => null);
+    if (role) await member.roles.add(role).catch(err => console.error(`Failed to add auto role: ${err}`));
+  }
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -452,8 +466,13 @@ client.on("interactionCreate", async (interaction) => {
       if (custom_id === "verify_user") {
         try {
           await interaction.deferReply({ ephemeral: true });
-          const roleId = config.roles.verifyRoleId;
-          const role = guild.roles.cache.get(roleId);
+          const roleId = config.roles?.verifyRoleId;
+          if (!roleId) return interaction.editReply({ content: "❌ Verification role ID not configured." });
+          
+          let role = guild.roles.cache.get(roleId);
+          if (!role) {
+            role = await guild.roles.fetch(roleId).catch(() => null);
+          }
           if (!role) return interaction.editReply({ content: "❌ Verification role not found. Please contact an admin." });
 
           if (member.roles.cache.has(roleId)) return interaction.editReply({ content: "ℹ️ You are already verified!" });
@@ -462,8 +481,10 @@ client.on("interactionCreate", async (interaction) => {
           await interaction.editReply({ content: "✅ You have been verified and granted access!" });
         } catch (err) {
           console.error("Verification error:", err);
-          if (interaction.deferred) await interaction.editReply({ content: "❌ Failed to assign verification role." });
-          else await interaction.reply({ content: "❌ Failed to assign verification role.", ephemeral: true });
+          try {
+            if (interaction.deferred) await interaction.editReply({ content: "❌ Failed to assign verification role. Make sure the bot's role is above the verification role." });
+            else await interaction.reply({ content: "❌ Failed to assign verification role.", ephemeral: true });
+          } catch {}
         }
       } else if (custom_id.startsWith("ticket_")) {
         const typeId = custom_id.replace("ticket_", "");

@@ -407,23 +407,39 @@ client.on("interactionCreate", async (interaction) => {
 
         try {
           const contractText = readFileSync(`./contracts/${contractFile}`, "utf8");
-          const embed = new EmbedBuilder()
-            .setTitle(contractType)
-            .setDescription(contractText.substring(0, 2048))
-            .setColor("#D4AF37");
-          
-          const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId(`sign_contract_init_${contractType}`)
-              .setLabel("Sign")
-              .setEmoji("🖋️")
-              .setStyle(ButtonStyle.Success)
-          );
+          const chunks = [];
+          for (let i = 0; i < contractText.length; i += 2000) {
+            chunks.push(contractText.substring(i, i + 2000));
+          }
 
-          await interaction.reply({ embeds: [embed], components: [row] });
+          await interaction.deferReply();
+
+          for (let i = 0; i < chunks.length; i++) {
+            const embed = new EmbedBuilder()
+              .setTitle(i === 0 ? contractType : `${contractType} (Cont.)`)
+              .setDescription(chunks[i])
+              .setColor("#D4AF37");
+            
+            if (i === chunks.length - 1) {
+              const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`sign_contract_init_${contractType}`)
+                  .setLabel("Sign")
+                  .setEmoji("🖋️")
+                  .setStyle(ButtonStyle.Success)
+              );
+              await interaction.followUp({ embeds: [embed], components: [row] });
+            } else {
+              await interaction.followUp({ embeds: [embed] });
+            }
+          }
         } catch (err) {
           console.error("Contract command error:", err);
-          await interaction.reply({ content: "❌ Error: Could not read contract file.", ephemeral: true });
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: "❌ Error: Could not read contract file.", ephemeral: true });
+          } else {
+            await interaction.followUp({ content: "❌ Error: Could not process the contract.", ephemeral: true });
+          }
         }
       } else if (commandName === "setup") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });

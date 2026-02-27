@@ -679,7 +679,7 @@ client.on("interactionCreate", async (interaction) => {
               chunks.push(contractText.substring(i, i + 3000));
             }
 
-            await interaction.deferReply();
+            await interaction.reply({ content: `Sending ${contractType}...`, ephemeral: true });
 
             for (let i = 0; i < chunks.length; i++) {
               const embed = new EmbedBuilder()
@@ -695,9 +695,9 @@ client.on("interactionCreate", async (interaction) => {
                     .setEmoji("🖋️")
                     .setStyle(ButtonStyle.Success)
                 );
-                await interaction.followUp({ embeds: [embed], components: [row] });
+                await interaction.channel.send({ embeds: [embed], components: [row] });
               } else {
-                await interaction.followUp({ embeds: [embed] });
+                await interaction.channel.send({ embeds: [embed] });
               }
             }
           } catch (err) {

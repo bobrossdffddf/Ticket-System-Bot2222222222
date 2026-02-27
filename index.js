@@ -152,6 +152,16 @@ client.once("clientReady", async () => {
         ],
       },
       {
+        name: "corporation",
+        description: "Create a corporation role and category (Admin only)",
+        default_member_permissions: PermissionFlagsBits.Administrator.toString(),
+        options: [
+          { name: "name", description: "Name of the corporation", type: 3, required: true },
+          { name: "users", description: "Users to add (mention them)", type: 3, required: true },
+          { name: "color", description: "Role color (Hex code, e.g. #FF0000)", type: 3, required: true }
+        ]
+      },
+      {
         name: "bill",
         description: "Billing commands",
         options: [
@@ -440,6 +450,60 @@ client.on("interactionCreate", async (interaction) => {
           } else {
             await interaction.followUp({ content: "❌ Error: Could not process the contract.", ephemeral: true });
           }
+        }
+      } else if (commandName === "corporation") {
+        if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
+        
+        const corpName = options.getString("name");
+        const usersInput = options.getString("users");
+        const roleColor = options.getString("color");
+
+        await interaction.deferReply({ ephemeral: true });
+
+        try {
+          // Create Role
+          const role = await guild.roles.create({
+            name: corpName,
+            color: roleColor,
+            reason: `Corporation ${corpName} creation`
+          });
+
+          // Extract User IDs and Add Role
+          const userIds = [...usersInput.matchAll(/<@!?(\d+)>/g)].map(match => match[1]);
+          const addedUsers = [];
+          for (const id of userIds) {
+            const m = await guild.members.fetch(id).catch(() => null);
+            if (m) {
+              await m.roles.add(role);
+              addedUsers.push(m.user.tag);
+            }
+          }
+
+          // Create Category
+          const category = await guild.channels.create({
+            name: corpName,
+            type: ChannelType.GuildCategory,
+            permissionOverwrites: [
+              { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+              { id: role.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+              { id: config.roles.supportRoleId, allow: [PermissionFlagsBits.ViewChannel] }
+            ]
+          });
+
+          // Create Channels
+          const channels = ["Correspondence", "Announcements", "Meetingroom"];
+          for (const name of channels) {
+            await guild.channels.create({
+              name: name,
+              type: ChannelType.GuildText,
+              parent: category.id
+            });
+          }
+
+          await interaction.editReply({ content: `✅ Corporation **${corpName}** created successfully.\nRole: ${role}\nUsers added: ${addedUsers.join(", ") || "None found"}` });
+        } catch (err) {
+          console.error("Corporation create error:", err);
+          await interaction.editReply({ content: `❌ Error creating corporation: ${err.message}` });
         }
       } else if (commandName === "setup") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });

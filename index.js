@@ -11,6 +11,7 @@ import {
   TextInputStyle,
   ChannelType,
   AttachmentBuilder,
+  StringSelectMenuBuilder,
 } from "discord.js";
 import { readdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 import dotenv from "dotenv";
@@ -142,14 +143,6 @@ client.once("clientReady", async () => {
         name: "contract",
         description: "Send a legal agreement (Admin only)",
         default_member_permissions: PermissionFlagsBits.Administrator.toString(),
-        options: [
-          { 
-            name: "type", 
-            description: "Name of the contract (e.g. Retainer Agreement)", 
-            type: 3, 
-            required: true 
-          }
-        ],
       },
       {
         name: "corporation",
@@ -409,48 +402,22 @@ client.on("interactionCreate", async (interaction) => {
       } else if (commandName === "contract") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
         
-        const contractType = options.getString("type");
-        const files = readdirSync("./contracts");
-        const contractFile = files.find(f => f === `contract-2-${contractType}.txt`);
-        
-        if (!contractFile) return interaction.reply({ content: "❌ Contract file not found.", ephemeral: true });
+        const files = readdirSync("./contracts").filter(f => f.endsWith(".txt"));
+        if (files.length === 0) return interaction.reply({ content: "❌ No contracts found in the contracts folder.", ephemeral: true });
 
-        try {
-          const contractText = readFileSync(`./contracts/${contractFile}`, "utf8");
-          const chunks = [];
-          for (let i = 0; i < contractText.length; i += 2000) {
-            chunks.push(contractText.substring(i, i + 2000));
-          }
+        const options = files.map(f => ({
+          label: f.replace(".txt", ""),
+          value: f
+        }));
 
-          await interaction.deferReply();
+        const row = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId("select_contract")
+            .setPlaceholder("Choose a contract to send")
+            .addOptions(options)
+        );
 
-          for (let i = 0; i < chunks.length; i++) {
-            const embed = new EmbedBuilder()
-              .setTitle(i === 0 ? contractType : `${contractType} (Cont.)`)
-              .setDescription(chunks[i])
-              .setColor("#D4AF37");
-            
-            if (i === chunks.length - 1) {
-              const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                  .setCustomId(`sign_contract_init_${contractType}`)
-                  .setLabel("Sign")
-                  .setEmoji("🖋️")
-                  .setStyle(ButtonStyle.Success)
-              );
-              await interaction.followUp({ embeds: [embed], components: [row] });
-            } else {
-              await interaction.followUp({ embeds: [embed] });
-            }
-          }
-        } catch (err) {
-          console.error("Contract command error:", err);
-          if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: "❌ Error: Could not read contract file.", ephemeral: true });
-          } else {
-            await interaction.followUp({ content: "❌ Error: Could not process the contract.", ephemeral: true });
-          }
-        }
+        await interaction.reply({ content: "Select a contract to display in this channel:", components: [row], ephemeral: true });
       } else if (commandName === "corporation") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
         
@@ -561,6 +528,7 @@ client.on("interactionCreate", async (interaction) => {
         try {
           await interaction.deferReply({ ephemeral: true });
           const roleId = config.roles?.verifyRoleId;
+          const autoRoleId = config.roles?.autoRoleId;
           if (!roleId) return interaction.editReply({ content: "❌ Verification role ID not configured." });
           
           let role = guild.roles.cache.get(roleId);
@@ -572,6 +540,11 @@ client.on("interactionCreate", async (interaction) => {
           if (member.roles.cache.has(roleId)) return interaction.editReply({ content: "ℹ️ You are already verified!" });
 
           await member.roles.add(role);
+          
+          if (autoRoleId && member.roles.cache.has(autoRoleId)) {
+            await member.roles.remove(autoRoleId).catch(err => console.error("Failed to remove auto role:", err));
+          }
+          
           await interaction.editReply({ content: "✅ You have been verified and granted access!" });
         } catch (err) {
           console.error("Verification error:", err);
@@ -694,6 +667,44 @@ client.on("interactionCreate", async (interaction) => {
         }
         await interaction.editReply({ content: "✅ Ticket closed. Deleting in 5 seconds." });
         setTimeout(() => channel.delete().catch(() => {}), 5000);
+      } else if (interaction.isStringSelectMenu()) {
+        if (custom_id === "select_contract") {
+          const fileName = interaction.values[0];
+          const contractType = fileName.replace(".txt", "");
+          
+          try {
+            const contractText = readFileSync(`./contracts/${fileName}`, "utf8");
+            const chunks = [];
+            for (let i = 0; i < contractText.length; i += 3000) {
+              chunks.push(contractText.substring(i, i + 3000));
+            }
+
+            await interaction.deferReply();
+
+            for (let i = 0; i < chunks.length; i++) {
+              const embed = new EmbedBuilder()
+                .setTitle(i === 0 ? contractType : `${contractType} (Cont.)`)
+                .setDescription(chunks[i])
+                .setColor("#D4AF37");
+              
+              if (i === chunks.length - 1) {
+                const row = new ActionRowBuilder().addComponents(
+                  new ButtonBuilder()
+                    .setCustomId(`sign_contract_init_${contractType}`)
+                    .setLabel("Sign")
+                    .setEmoji("🖋️")
+                    .setStyle(ButtonStyle.Success)
+                );
+                await interaction.followUp({ embeds: [embed], components: [row] });
+              } else {
+                await interaction.followUp({ embeds: [embed] });
+              }
+            }
+          } catch (err) {
+            console.error("Contract select error:", err);
+            await interaction.followUp({ content: "❌ Error: Could not read contract file.", ephemeral: true });
+          }
+        }
       }
     } else if (interaction.isModalSubmit()) {
       const { customId: custom_id, fields, guild, user, channel } = interaction;
@@ -702,12 +713,19 @@ client.on("interactionCreate", async (interaction) => {
         const contractType = custom_id.replace("sign_modal_", "");
         const name = fields.getTextInputValue("signer_name");
         const date = fields.getTextInputValue("sign_date");
-        const now = new Date().toLocaleDateString();
 
         const signEmbed = new EmbedBuilder()
-          .setTitle("📝 Contract Signed")
-          .setDescription(`**Attorney signature:** Saul Goodman, Mickey Haller **Date:** ${now}\n**Client signature:** ${name} **Date:** ${date}`)
-          .setColor("#00FF00")
+          .setTitle("🏛️ OFFICIAL LEGAL FILING")
+          .setAuthor({ name: "Goodman & Haller | Blackstone", iconURL: "https://i.postimg.cc/15j6MgxY/Untitled-design-(6).png" })
+          .setDescription(`This document serves as an official record of legal agreement between **Goodman & Haller | Blackstone** and the undersigned party.\n\n**CONTRACT:** ${contractType}\n\n**STATUS:** SIGNED & VERIFIED`)
+          .addFields(
+            { name: "👤 Client Name", value: `\`${name}\``, inline: true },
+            { name: "📅 Execution Date", value: `\`${date}\``, inline: true },
+            { name: "⚖️ Authorized Representative", value: "Saul Goodman & Mickey Haller", inline: false }
+          )
+          .setColor("#D4AF37")
+          .setThumbnail("https://i.postimg.cc/15j6MgxY/Untitled-design-(6).png")
+          .setFooter({ text: "Confidential Legal Document | Goodman & Haller", iconURL: guild.iconURL() })
           .setTimestamp();
 
         // Update original message
@@ -718,7 +736,7 @@ client.on("interactionCreate", async (interaction) => {
         if (ticketData.contractChannelId) {
           const logChannel = await guild.channels.fetch(ticketData.contractChannelId).catch(() => null);
           if (logChannel) {
-            await logChannel.send({ content: `New signed contract from ${user.tag} in ${channel}`, embeds: [signEmbed] });
+            await logChannel.send({ content: `📄 **New Signed Contract: ${contractType}**\nExecuted by ${user} in ${channel}`, embeds: [signEmbed] });
           }
         }
         return;

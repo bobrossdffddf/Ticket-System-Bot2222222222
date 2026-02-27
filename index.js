@@ -491,7 +491,7 @@ client.on("interactionCreate", async (interaction) => {
           });
 
           // Create Channels
-          const channels = ["Correspondence", "Announcements", "Meetingroom"];
+          const channels = ["💬-Correspondence", "👤 client communications", "🎤 Meetingroom"];
           for (const name of channels) {
             await guild.channels.create({
               name: name,

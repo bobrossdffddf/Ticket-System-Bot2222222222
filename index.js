@@ -12,7 +12,7 @@ import {
   ChannelType,
   AttachmentBuilder,
 } from "discord.js";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "fs";
 import dotenv from "dotenv";
 import http from "http";
 import { createCanvas, loadImage } from "canvas";
@@ -145,14 +145,10 @@ client.once("clientReady", async () => {
         options: [
           { 
             name: "type", 
-            description: "Type of contract to send", 
+            description: "Name of the contract (e.g. Retainer Agreement)", 
             type: 3, 
-            required: true,
-            choices: [
-              { name: "Retainer Agreement", value: "retainer" }
-            ]
-          },
-          { name: "target", description: "User to send the contract to (DMs)", type: 6, required: false },
+            required: true 
+          }
         ],
       },
       {
@@ -403,50 +399,31 @@ client.on("interactionCreate", async (interaction) => {
       } else if (commandName === "contract") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
         
-        const targetUser = options.getUser("target");
-        const contractType = options.getString("type") || "retainer";
+        const contractType = options.getString("type");
+        const files = readdirSync("./contracts");
+        const contractFile = files.find(f => f === `contract-2-${contractType}.txt`);
         
-        const contracts = {
-          "retainer": {
-            title: "Legal Retainer Agreement",
-            file: "./attached_assets/retainer_agreement.txt",
-            color: "#D4AF37"
-          }
-          // Add new contracts here easily:
-          // "nda": { title: "Non-Disclosure Agreement", file: "./assets/nda.txt", color: "#C0C0C0" }
-        };
-
-        const selectedContract = contracts[contractType];
-        if (!selectedContract) return interaction.reply({ content: "❌ Invalid contract type.", ephemeral: true });
+        if (!contractFile) return interaction.reply({ content: "❌ Contract file not found.", ephemeral: true });
 
         try {
-          const contractText = readFileSync(selectedContract.file, "utf8");
+          const contractText = readFileSync(`./contracts/${contractFile}`, "utf8");
           const embed = new EmbedBuilder()
-            .setTitle(selectedContract.title)
+            .setTitle(contractType)
             .setDescription(contractText.substring(0, 2048))
-            .setColor(selectedContract.color);
+            .setColor("#D4AF37");
           
           const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-              .setCustomId(`sign_contract_${targetUser ? targetUser.id : interaction.user.id}`)
-              .setLabel("Sign Agreement")
+              .setCustomId(`sign_contract_init_${contractType}`)
+              .setLabel("Sign")
+              .setEmoji("🖋️")
               .setStyle(ButtonStyle.Success)
           );
 
-          if (targetUser) {
-            try {
-              await targetUser.send({ embeds: [embed], components: [row] });
-              await interaction.reply({ content: `✅ Contract sent to ${targetUser.tag}` });
-            } catch (err) {
-              await interaction.reply({ content: `❌ Failed to DM ${targetUser.tag}. Sending here instead...` });
-              await interaction.channel.send({ content: `${targetUser}, please review and sign:`, embeds: [embed], components: [row] });
-            }
-          } else {
-            await interaction.reply({ embeds: [embed], components: [row] });
-          }
+          await interaction.reply({ embeds: [embed], components: [row] });
         } catch (err) {
           console.error("Contract command error:", err);
-          await interaction.reply({ content: "❌ Error: Could not read contract file or send message.", ephemeral: true });
+          await interaction.reply({ content: "❌ Error: Could not read contract file.", ephemeral: true });
         }
       } else if (commandName === "setup") {
         if (!member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: "❌ Admin only.", ephemeral: true });
@@ -540,6 +517,30 @@ client.on("interactionCreate", async (interaction) => {
           modal.addComponents(new ActionRowBuilder().addComponents(input));
         });
         await interaction.showModal(modal);
+      } else if (custom_id.startsWith("sign_contract_init_")) {
+        const contractType = custom_id.replace("sign_contract_init_", "");
+        const modal = new ModalBuilder()
+          .setCustomId(`sign_modal_${contractType}`)
+          .setTitle(`Sign ${contractType}`);
+
+        const nameInput = new TextInputBuilder()
+          .setCustomId("signer_name")
+          .setLabel("Full Name")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        const dateInput = new TextInputBuilder()
+          .setCustomId("sign_date")
+          .setLabel("Date (MM/DD/YYYY)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(nameInput),
+          new ActionRowBuilder().addComponents(dateInput)
+        );
+
+        await interaction.showModal(modal);
       } else if (custom_id.startsWith("paid_button_")) {
         const billId = custom_id.replace("paid_button_", "");
         const bill = ticketData.bills?.[user.id]?.find(b => b.id === billId);
@@ -615,7 +616,34 @@ client.on("interactionCreate", async (interaction) => {
         setTimeout(() => channel.delete().catch(() => {}), 5000);
       }
     } else if (interaction.isModalSubmit()) {
-      const { customId: custom_id, fields, guild, user } = interaction;
+      const { customId: custom_id, fields, guild, user, channel } = interaction;
+      
+      if (custom_id.startsWith("sign_modal_")) {
+        const contractType = custom_id.replace("sign_modal_", "");
+        const name = fields.getTextInputValue("signer_name");
+        const date = fields.getTextInputValue("sign_date");
+        const now = new Date().toLocaleDateString();
+
+        const signEmbed = new EmbedBuilder()
+          .setTitle("📝 Contract Signed")
+          .setDescription(`**Attorney signature:** Saul Goodman, Mickey Haller **Date:** ${now}\n**Client signature:** ${name} **Date:** ${date}`)
+          .setColor("#00FF00")
+          .setTimestamp();
+
+        // Update original message
+        await interaction.update({ components: [] });
+        await channel.send({ embeds: [signEmbed] });
+
+        // Send to setup contract channel
+        if (ticketData.contractChannelId) {
+          const logChannel = await guild.channels.fetch(ticketData.contractChannelId).catch(() => null);
+          if (logChannel) {
+            await logChannel.send({ content: `New signed contract from ${user.tag} in ${channel}`, embeds: [signEmbed] });
+          }
+        }
+        return;
+      }
+
       if (custom_id.startsWith("modal_")) {
         const typeId = custom_id.replace("modal_", "");
         const buttonConfig = config.ticketPanel.buttons.find(b => b.id === typeId);
